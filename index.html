@@ -241,26 +241,6 @@
     let currentDashboardId = null; 
     let currentUser = null;
 
-    // ★修正：1回の取得件数を1000件に戻し、エラーログを詳細化
-    async function fetchAllData(query) {
-        let allData = [];
-        let from = 0;
-        const limit = 1000; 
-        while (true) {
-            const { data, error } = await query.range(from, from + limit - 1);
-            if (error) {
-                console.error('Supabase Error:', error);
-                alert('データ取得エラー詳細:\n' + JSON.stringify(error, null, 2));
-                throw error;
-            }
-            if (data.length === 0) break;
-            allData = allData.concat(data);
-            if (data.length < limit) break;
-            from += limit;
-        }
-        return allData;
-    }
-
     window.onload = async function() {
         const savedUser = sessionStorage.getItem('currentUser');
         if (savedUser) {
@@ -497,11 +477,12 @@
     }
 
     async function initializeFilters() {
-        const query = supabaseClient.from('sales_data').select('account_name, item_name');
-        let data = [];
-        try {
-            data = await fetchAllData(query);
-        } catch (error) { return; }
+        // ★修正：シンプルなselectに戻す
+        const { data, error } = await supabaseClient.from('sales_data').select('account_name, item_name');
+        if (error) {
+            alert('科目取得エラー:\n' + JSON.stringify(error, null, 2));
+            return;
+        }
 
         const accounts = new Set();
         const items = new Set();
@@ -536,7 +517,6 @@
         currentBreakdownKey = document.getElementById('breakdownKey').value;
         currentTaxMode = document.getElementById('taxMode').value;
 
-        // ★修正：全選択状態かどうかを判定し、全選択なら in フィルタを使わない
         const allAccountCheckboxes = document.querySelectorAll('#accountCheckboxes input[type="checkbox"]');
         const selectedAccountCheckboxes = document.querySelectorAll('#accountCheckboxes input[type="checkbox"]:checked');
         const isAllAccountsSelected = allAccountCheckboxes.length > 0 && allAccountCheckboxes.length === selectedAccountCheckboxes.length;
@@ -552,7 +532,6 @@
         if (dateFrom) query = query.gte('sales_date', dateFrom);
         if (dateTo) query = query.lte('sales_date', dateTo);
         
-        // 全選択でない場合のみ in フィルタを使用する
         if (!isAllAccountsSelected && selectedAccounts.length > 0) {
             query = query.in('account_name', selectedAccounts);
         }
@@ -560,10 +539,12 @@
             query = query.in('item_name', selectedItems);
         }
 
-        let data = [];
-        try {
-            data = await fetchAllData(query);
-        } catch (error) { return; }
+        // ★修正：シンプルなselectに戻す
+        const { data, error } = await query;
+        if (error) {
+            alert('データ取得エラー:\n' + JSON.stringify(error, null, 2));
+            return;
+        }
 
         currentFilteredData = data;
         displayData(currentFilteredData);
