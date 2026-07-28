@@ -3,39 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <title>売上分析ダッシュボード</title>
-    <!-- PWA設定 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0d6efd">
     <link rel="apple-touch-icon" href="icon-192.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-light">
 
-<!-- ログイン画面 -->
 <div id="loginScreen" style="display: flex; align-items: center; justify-content: center; height: 100vh;">
     <div class="card shadow" style="width: 350px;">
         <div class="card-body">
             <h3 class="text-center mb-4">ログイン</h3>
-            <div class="mb-3">
-                <input type="text" class="form-control" id="loginUsername" placeholder="ユーザーID">
-            </div>
-            <div class="mb-3">
-                <input type="password" class="form-control" id="loginPassword" placeholder="パスワード">
-            </div>
+            <div class="mb-3"><input type="text" class="form-control" id="loginUsername" placeholder="ユーザーID"></div>
+            <div class="mb-3"><input type="password" class="form-control" id="loginPassword" placeholder="パスワード"></div>
             <button class="btn btn-primary w-100" onclick="login()">ログイン</button>
         </div>
     </div>
 </div>
 
-<!-- メインアプリ画面 -->
 <div id="mainApp" style="display: none;" class="container-fluid p-4">
-    
     <div class="card shadow-sm mb-4">
         <div class="card-body d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-2">
@@ -47,7 +38,6 @@
             </div>
             <div class="d-flex gap-2">
                 <button class="btn btn-outline-dark" id="userManageBtn" onclick="openUserModal()" style="display: none;">👥 ユーザー管理</button>
-                <!-- ★追加：アカウント設定ボタン -->
                 <button class="btn btn-outline-primary" onclick="openAccountModal()">⚙️ アカウント設定</button>
                 <button class="btn btn-primary" onclick="saveDashboard()">💾 Supabaseに保存</button>
                 <button class="btn btn-outline-secondary" onclick="newDashboard()">🆕 新規作成</button>
@@ -146,22 +136,8 @@
 
         <div class="col-md-9">
             <div class="row mb-3" id="summaryArea">
-                <div class="col-md-4">
-                    <div class="card text-white bg-success shadow-sm">
-                        <div class="card-body">
-                            <h6 class="card-title">合計売上額</h6>
-                            <h4 id="totalSales">¥0</h4>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card text-white bg-info shadow-sm">
-                        <div class="card-body">
-                            <h6 class="card-title">対象データ数</h6>
-                            <h4 id="dataCount">0 件</h4>
-                        </div>
-                    </div>
-                </div>
+                <div class="col-md-4"><div class="card text-white bg-success shadow-sm"><div class="card-body"><h6 class="card-title">合計売上額</h6><h4 id="totalSales">¥0</h4></div></div></div>
+                <div class="col-md-4"><div class="card text-white bg-info shadow-sm"><div class="card-body"><h6 class="card-title">対象データ数</h6><h4 id="dataCount">0 件</h4></div></div></div>
             </div>
 
             <div class="card shadow-sm mb-3">
@@ -191,18 +167,12 @@
     </div>
 </div>
 
-<!-- アップロード時の重複確認モーダル -->
+<!-- モーダル群 -->
 <div class="modal fade" id="uploadModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">データのアップロード方法を選択</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                選択した事業所には既にデータが存在します。<br>
-                どのようにアップロードしますか？
-            </div>
+            <div class="modal-header"><h5 class="modal-title">データのアップロード方法を選択</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">選択した事業所には既にデータが存在します。<br>どのようにアップロードしますか？</div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
                 <button type="button" class="btn btn-warning" onclick="processUpload('append')">追加（マージ）</button>
@@ -212,58 +182,33 @@
     </div>
 </div>
 
-<!-- ユーザー管理モーダル -->
 <div class="modal fade" id="userManageModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">ユーザー管理</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
+            <div class="modal-header"><h5 class="modal-title">ユーザー管理</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
                 <h6>新規ユーザー追加</h6>
                 <div class="row g-2 mb-4">
                     <div class="col-md-4"><input type="text" class="form-control" id="newUsername" placeholder="ユーザーID"></div>
                     <div class="col-md-4"><input type="password" class="form-control" id="newPassword" placeholder="パスワード"></div>
-                    <div class="col-md-3">
-                        <select class="form-select" id="newRole">
-                            <option value="user">使用者</option>
-                            <option value="admin">管理者</option>
-                        </select>
-                    </div>
+                    <div class="col-md-3"><select class="form-select" id="newRole"><option value="user">使用者</option><option value="admin">管理者</option></select></div>
                     <div class="col-md-1"><button class="btn btn-primary w-100" onclick="addUser()">＋</button></div>
                 </div>
-                
                 <h6>ユーザー一覧</h6>
-                <table class="table table-sm table-bordered">
-                    <thead>
-                        <tr><th>ユーザーID</th><th>権限</th><th>操作</th></tr>
-                    </thead>
-                    <tbody id="userTableBody"></tbody>
-                </table>
+                <table class="table table-sm table-bordered"><thead><tr><th>ユーザーID</th><th>権限</th><th>操作</th></tr></thead><tbody id="userTableBody"></tbody></table>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ★追加：アカウント設定モーダル -->
 <div class="modal fade" id="accountModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">⚙️ アカウント設定</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
+            <div class="modal-header"><h5 class="modal-title">⚙️ アカウント設定</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
                 <p>ログイン中のユーザー：<strong id="currentUsernameDisplay"></strong></p>
-                <div class="mb-3">
-                    <label class="form-label">新しいユーザー名</label>
-                    <input type="text" class="form-control" id="accNewUsername" placeholder="変更する場合のみ入力">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">新しいパスワード</label>
-                    <input type="password" class="form-control" id="accNewPassword" placeholder="変更する場合のみ入力">
-                </div>
+                <div class="mb-3"><label class="form-label">新しいユーザー名</label><input type="text" class="form-control" id="accNewUsername" placeholder="変更する場合のみ入力"></div>
+                <div class="mb-3"><label class="form-label">新しいパスワード</label><input type="password" class="form-control" id="accNewPassword" placeholder="変更する場合のみ入力"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
@@ -274,35 +219,26 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
-    // PWA Service Worker 登録
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-            navigator.serviceWorker.register('service-worker.js').then(function(registration) {
-                console.log('ServiceWorker registration successful');
-            }, function(err) {
-                console.log('ServiceWorker registration failed: ', err);
-            });
-        });
-    }
-
     const SUPABASE_URL = 'https://hussfbffatqfcguyppfb.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1c3NmYmZmYXRxZmNndXlwcGZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3NTQ2MDIsImV4cCI6MjEwMDMzMDYwMn0.YQRtJ60R5URI9ffKhMmTpshYNQqVlzMI47oxEU3TQgc';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('service-worker.js').then(function(registration) {}, function(err) {});
+        });
+    }
+
     let offices = []; 
-    let officeData = {}; 
     let pendingUpload = null; 
     let currentFilteredData = []; 
     let currentAggregationUnit = 'month'; 
     let currentBreakdownKey = '勘定科目名'; 
     let currentTaxMode = 'included'; 
-    
     let charts = []; 
     let chartCounter = 0;
     let currentDashboardId = null; 
-    
     let currentUser = null;
 
     window.onload = async function() {
@@ -310,43 +246,27 @@
         if (savedUser) {
             currentUser = JSON.parse(savedUser);
             showMainApp();
+            await loadOffices();
+            await initializeFilters();
             
             const urlParams = new URLSearchParams(window.location.search);
             const sharedId = urlParams.get('dashboard');
-            if (sharedId) {
-                currentDashboardId = sharedId;
-            } else {
-                currentDashboardId = localStorage.getItem('currentDashboardId');
-            }
-            if (currentDashboardId) {
-                await loadDashboard();
-            }
+            if (sharedId) currentDashboardId = sharedId;
+            else currentDashboardId = localStorage.getItem('currentDashboardId');
+            if (currentDashboardId) await loadDashboard();
         }
     };
-
-    // ==========================================
-    // ログイン・ログアウト・権限管理
-    // ==========================================
 
     async function login() {
         const username = document.getElementById('loginUsername').value;
         const password = document.getElementById('loginPassword').value;
-        
-        const { data, error } = await supabaseClient
-            .from('app_users')
-            .select('*')
-            .eq('username', username)
-            .eq('password', password)
-            .single();
-            
-        if (error || !data) {
-            alert('ユーザーIDまたはパスワードが間違っています');
-            return;
-        }
-        
+        const { data, error } = await supabaseClient.from('app_users').select('*').eq('username', username).eq('password', password).single();
+        if (error || !data) { alert('ユーザーIDまたはパスワードが間違っています'); return; }
         currentUser = data;
         sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
         showMainApp();
+        await loadOffices();
+        await initializeFilters();
     }
 
     function logout() {
@@ -354,8 +274,6 @@
         sessionStorage.removeItem('currentUser');
         document.getElementById('mainApp').style.display = 'none';
         document.getElementById('loginScreen').style.display = 'flex';
-        document.getElementById('loginUsername').value = '';
-        document.getElementById('loginPassword').value = '';
     }
 
     function showMainApp() {
@@ -371,174 +289,103 @@
         document.getElementById('userManageBtn').style.display = isAdmin ? 'inline-block' : 'none';
     }
 
-    // ==========================================
-    // ★追加：アカウント設定機能
-    // ==========================================
-
     function openAccountModal() {
         document.getElementById('currentUsernameDisplay').innerText = currentUser.username;
         document.getElementById('accNewUsername').value = '';
         document.getElementById('accNewPassword').value = '';
-        const modal = new bootstrap.Modal(document.getElementById('accountModal'));
-        modal.show();
+        new bootstrap.Modal(document.getElementById('accountModal')).show();
     }
 
     async function updateAccount() {
         const newUsername = document.getElementById('accNewUsername').value;
         const newPassword = document.getElementById('accNewPassword').value;
-        
-        if (!newUsername && !newPassword) {
-            alert('変更するユーザー名またはパスワードを入力してください');
-            return;
-        }
-        
+        if (!newUsername && !newPassword) { alert('変更するユーザー名またはパスワードを入力してください'); return; }
         const updateData = {};
         if (newUsername) updateData.username = newUsername;
         if (newPassword) updateData.password = newPassword;
-        
-        const { error } = await supabaseClient
-            .from('app_users')
-            .update(updateData)
-            .eq('id', currentUser.id);
-            
-        if (error) {
-            alert('更新に失敗しました: ' + error.message);
-            return;
-        }
-        
-        // ローカルのユーザー情報も更新
+        const { error } = await supabaseClient.from('app_users').update(updateData).eq('id', currentUser.id);
+        if (error) { alert('更新に失敗しました: ' + error.message); return; }
         if (newUsername) currentUser.username = newUsername;
         if (newPassword) currentUser.password = newPassword;
         sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-        
         alert('アカウント情報を更新しました');
-        const modal = bootstrap.Modal.getInstance(document.getElementById('accountModal'));
-        modal.hide();
+        bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
     }
 
-    // ==========================================
-    // ユーザー管理機能
-    // ==========================================
-
-    async function openUserModal() {
-        const modal = new bootstrap.Modal(document.getElementById('userManageModal'));
-        modal.show();
-        await loadUsers();
-    }
-
+    async function openUserModal() { new bootstrap.Modal(document.getElementById('userManageModal')).show(); await loadUsers(); }
     async function loadUsers() {
-        const { data, error } = await supabaseClient.from('app_users').select('*');
-        if (error) return;
-        
+        const { data } = await supabaseClient.from('app_users').select('*');
         const tbody = document.getElementById('userTableBody');
         tbody.innerHTML = '';
         data.forEach(u => {
-            // ★変更：管理者ロールの場合は編集・削除不可にする
             const isAdmin = u.role === 'admin';
-            tbody.innerHTML += `
-                <tr>
-                    <td>${u.username}</td>
-                    <td>
-                        <select class="form-select form-select-sm" onchange="changeRole('${u.id}', this.value)" ${isAdmin ? 'disabled' : ''}>
-                            <option value="user" ${u.role === 'user' ? 'selected' : ''}>使用者</option>
-                            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>管理者</option>
-                        </select>
-                    </td>
-                    <td>${isAdmin ? '-' : `<button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">削除</button>`}</td>
-                </tr>
-            `;
+            tbody.innerHTML += `<tr><td>${u.username}</td><td><select class="form-select form-select-sm" onchange="changeRole('${u.id}', this.value)" ${isAdmin ? 'disabled' : ''}><option value="user" ${u.role === 'user' ? 'selected' : ''}>使用者</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>管理者</option></select></td><td>${isAdmin ? '-' : `<button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">削除</button>`}</td></tr>`;
         });
     }
-
     async function addUser() {
         const username = document.getElementById('newUsername').value;
         const password = document.getElementById('newPassword').value;
         const role = document.getElementById('newRole').value;
-        
-        if (!username || !password) {
-            alert('ユーザーIDとパスワードを入力してください');
-            return;
-        }
-        
+        if (!username || !password) { alert('ユーザーIDとパスワードを入力してください'); return; }
         const { error } = await supabaseClient.from('app_users').insert({ username, password, role });
-        if (error) {
-            alert('追加エラー: ' + error.message);
-            return;
-        }
-        document.getElementById('newUsername').value = '';
-        document.getElementById('newPassword').value = '';
+        if (error) { alert('追加エラー: ' + error.message); return; }
         loadUsers();
     }
-
-    async function deleteUser(id) {
-        if (!confirm('このユーザーを削除しますか？')) return;
-        await supabaseClient.from('app_users').delete().eq('id', id);
-        loadUsers();
-    }
-
-    async function changeRole(id, role) {
-        await supabaseClient.from('app_users').update({ role }).eq('id', id);
-        loadUsers();
-    }
+    async function deleteUser(id) { if (!confirm('削除しますか？')) return; await supabaseClient.from('app_users').delete().eq('id', id); loadUsers(); }
+    async function changeRole(id, role) { await supabaseClient.from('app_users').update({ role }).eq('id', id); loadUsers(); }
 
     // ==========================================
-    // 事業所管理ロジック
+    // 事業所管理ロジック（Supabase連携）
     // ==========================================
 
-    function addOffice() {
+    async function loadOffices() {
+        const { data, error } = await supabaseClient.from('offices').select('*');
+        if (error) { console.error('事業所取得エラー', error); return; }
+        offices = data.map(o => ({ id: o.id, name: o.name }));
+        renderOffices();
+    }
+
+    async function addOffice() {
         const id = document.getElementById('newOfficeId').value;
         const name = document.getElementById('newOfficeName').value;
         if (!id || !name) { alert('番号と名称を入力してください'); return; }
         if (offices.some(o => o.id === id)) { alert('その番号は既に存在します'); return; }
         
-        offices.push({ id: id, name: name });
-        officeData[id] = []; 
+        const { error } = await supabaseClient.from('offices').insert({ id, name });
+        if (error) { alert('追加エラー: ' + error.message); return; }
         
+        offices.push({ id, name });
         document.getElementById('newOfficeId').value = '';
         document.getElementById('newOfficeName').value = '';
         renderOffices();
     }
 
-    function editOffice(oldId) {
+    async function editOffice(oldId) {
         const office = offices.find(o => o.id === oldId);
         if (!office) return;
-
         const newId = prompt('新しい番号を入力してください', office.id);
         if (newId === null) return; 
         const newName = prompt('新しい名称を入力してください', office.name);
         if (newName === null) return; 
+        if (newId !== oldId && offices.some(o => o.id === newId)) { alert('その番号は既に存在します'); return; }
 
-        if (newId !== oldId && offices.some(o => o.id === newId)) {
-            alert('その番号は既に存在します');
-            return;
-        }
-
-        if (newId !== oldId) {
-            officeData[newId] = officeData[oldId];
-            delete officeData[oldId];
-            officeData[newId].forEach(file => {
-                file.rows.forEach(row => { row['事業所ID'] = newId; });
-            });
-        }
+        // Supabase更新
+        await supabaseClient.from('offices').update({ id: newId, name: newName }).eq('id', oldId);
+        // 紐づく売上データの事業所IDも更新
+        await supabaseClient.from('sales_data').update({ office_id: newId }).eq('office_id', oldId);
 
         office.id = newId;
         office.name = newName;
         renderOffices();
-        applyFilter();
         alert('事業所情報を更新しました');
     }
 
-    function deleteOffice(id) {
-        if (!confirm('この事業所を削除しますか？（アップロード済みのデータも消えます）')) return;
+    async function deleteOffice(id) {
+        if (!confirm('この事業所を削除しますか？（アップロード済みの売上データも全て消えます）')) return;
+        await supabaseClient.from('offices').delete().eq('id', id);
+        await supabaseClient.from('sales_data').delete().eq('office_id', id);
+        
         offices = offices.filter(o => o.id !== id);
-        delete officeData[id];
-        renderOffices();
-        applyFilter(); 
-    }
-
-    function deleteFile(officeId, fileId) {
-        if (!confirm('このファイルのデータを削除しますか？')) return;
-        officeData[officeId] = officeData[officeId].filter(f => f.fileId !== fileId);
         renderOffices();
         initializeFilters();
         applyFilter();
@@ -563,26 +410,13 @@
                     </div>
                 </li>
             `;
-            if (officeData[o.id] && officeData[o.id].length > 0) {
-                let filesHtml = '<li class="list-group-item py-1 ps-4 bg-light">';
-                officeData[o.id].forEach(file => {
-                    filesHtml += `
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <span class="text-muted small">📄 ${file.fileName}</span>
-                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:10px;" onclick="deleteFile('${o.id}', '${file.fileId}')">削除</button>
-                        </div>
-                    `;
-                });
-                filesHtml += '</li>';
-                list.innerHTML += filesHtml;
-            }
             uploadSelect.innerHTML += `<option value="${o.id}">${o.id}: ${o.name}</option>`;
             filterSelect.innerHTML += `<option value="${o.id}">${o.id}: ${o.name}</option>`;
         });
     }
 
     // ==========================================
-    // CSVアップロードロジック
+    // CSVアップロードロジック（Supabase連携）
     // ==========================================
 
     function normalizeDate(dateStr) {
@@ -590,10 +424,7 @@
         let d = dateStr.replace(/\//g, '-').split(' ')[0];
         let parts = d.split('-');
         if (parts.length === 3) {
-            let year = parts[0];
-            let month = parts[1].padStart(2, '0');
-            let day = parts[2].padStart(2, '0');
-            return `${year}-${month}-${day}`;
+            return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
         }
         return d; 
     }
@@ -601,41 +432,28 @@
     document.getElementById('csvFileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         const officeId = document.getElementById('uploadOfficeSelect').value;
-        
-        if (!officeId) {
-            alert('アップロード先の事業所を選択してください');
-            e.target.value = ''; 
-            return;
-        }
+        if (!officeId) { alert('アップロード先の事業所を選択してください'); e.target.value = ''; return; }
         if (!file) return;
 
         const reader = new FileReader();
         reader.readAsText(file, 'Shift-JIS');
-        
         reader.onload = function(event) {
-            const csvData = event.target.result;
-            Papa.parse(csvData, {
+            Papa.parse(event.target.result, {
                 header: true,
                 skipEmptyLines: true,
                 transformHeader: function(h) { return h.trim(); },
-                complete: function(results) {
+                complete: async function(results) {
                     const cleanedData = results.data.map(row => {
-                        if (row['売上日']) {
-                            row['売上日'] = normalizeDate(row['売上日']);
-                        }
-                        row['事業所ID'] = officeId; 
+                        if (row['売上日']) row['売上日'] = normalizeDate(row['売上日']);
                         return row;
                     });
                     
-                    pendingUpload = { 
-                        officeId: officeId, 
-                        fileName: file.name, 
-                        data: cleanedData 
-                    };
+                    // 既存データがあるか確認
+                    const { count } = await supabaseClient.from('sales_data').select('*', { count: 'exact', head: true }).eq('office_id', officeId);
+                    pendingUpload = { officeId, data: cleanedData };
 
-                    if (officeData[officeId] && officeData[officeId].length > 0) {
-                        const modal = new bootstrap.Modal(document.getElementById('uploadModal'));
-                        modal.show();
+                    if (count > 0) {
+                        new bootstrap.Modal(document.getElementById('uploadModal')).show();
                     } else {
                         processUpload('append'); 
                     }
@@ -644,126 +462,108 @@
         };
     });
 
-    function processUpload(mode) {
+    async function processUpload(mode) {
         if (!pendingUpload) return;
-        const { officeId, fileName, data } = pendingUpload;
+        const { officeId, data } = pendingUpload;
+
+        // ボタンを押せなくしてローディング中表示などの工夫が必要だが、今回はシンプルにアラートで待機
+        alert('アップロード中です。完了まで画面を閉じないでください。');
 
         if (mode === 'overwrite') {
-            officeData[officeId] = [];
-        } 
-        
-        const fileId = 'file_' + Date.now();
-        officeData[officeId].push({
-            fileId: fileId,
-            fileName: fileName,
-            rows: data
-        });
+            await supabaseClient.from('sales_data').delete().eq('office_id', officeId);
+        }
 
-        const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
-        if (modal) modal.hide();
-        
+        // Supabase用のデータに変換
+        const insertData = data.map(row => ({
+            office_id: officeId,
+            sales_date: row['売上日'],
+            account_name: row['勘定科目名'],
+            item_name: row['費目名称'],
+            sales_amount: parseNumber(row['売上額']),
+            tax_amount: parseNumber(row['売上額（税）']),
+            row_data: row
+        }));
+
+        // 1000件ずつに分割してINSERT（Supabaseの制限対策）
+        const chunkSize = 1000;
+        for (let i = 0; i < insertData.length; i += chunkSize) {
+            const chunk = insertData.slice(i, i + chunkSize);
+            const { error } = await supabaseClient.from('sales_data').insert(chunk);
+            if (error) console.error('Insert error', error);
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('uploadModal'))?.hide();
         pendingUpload = null;
         document.getElementById('csvFileInput').value = ''; 
-        renderOffices();
-        initializeFilters();
-        applyFilter();
-        alert('データのアップロードが完了しました');
+        await initializeFilters();
+        await applyFilter();
+        alert('データのアップロードが完了しました！');
     }
 
     // ==========================================
-    // フィルタリング・集計ロジック
+    // フィルタリング・集計ロジック（Supabase連携）
     // ==========================================
 
     function toggleAll(containerId, isChecked) {
-        const checkboxes = document.querySelectorAll(`#${containerId} input[type="checkbox"]`);
-        checkboxes.forEach(cb => { cb.checked = isChecked; });
+        document.querySelectorAll(`#${containerId} input[type="checkbox"]`).forEach(cb => cb.checked = isChecked);
     }
 
-    function initializeFilters() {
+    async function initializeFilters() {
+        // Supabaseから科目・費目のリストを取得
+        const { data, error } = await supabaseClient.from('sales_data').select('account_name, item_name');
+        if (error) return;
+
         const accounts = new Set();
         const items = new Set();
-
-        Object.values(officeData).forEach(filesArray => {
-            filesArray.forEach(file => {
-                file.rows.forEach(row => {
-                    if (row['勘定科目名']) accounts.add(row['勘定科目名']);
-                    if (row['費目名称']) items.add(row['費目名称']);
-                });
-            });
+        data.forEach(row => {
+            if (row.account_name) accounts.add(row.account_name);
+            if (row.item_name) items.add(row.item_name);
         });
 
         const accountContainer = document.getElementById('accountCheckboxes');
         const itemContainer = document.getElementById('itemCheckboxes');
-
         accountContainer.innerHTML = '';
         itemContainer.innerHTML = '';
 
         let accIndex = 0;
         accounts.forEach(acc => {
-            accountContainer.innerHTML += `
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" value="${acc}" id="acc_${accIndex}" checked>
-                    <label class="form-check-label" for="acc_${accIndex}">${acc}</label>
-                </div>
-            `;
+            accountContainer.innerHTML += `<div class="form-check"><input class="form-check-input" type="checkbox" value="${acc}" id="acc_${accIndex}" checked><label class="form-check-label" for="acc_${accIndex}">${acc}</label></div>`;
             accIndex++;
         });
 
         let itmIndex = 0;
         items.forEach(itm => {
-            itemContainer.innerHTML += `
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" value="${itm}" id="itm_${itmIndex}" checked>
-                    <label class="form-check-label" for="itm_${itmIndex}">${itm}</label>
-                </div>
-            `;
+            itemContainer.innerHTML += `<div class="form-check"><input class="form-check-input" type="checkbox" value="${itm}" id="itm_${itmIndex}" checked><label class="form-check-label" for="itm_${itmIndex}">${itm}</label></div>`;
             itmIndex++;
         });
     }
 
-    function applyFilter() {
+    async function applyFilter() {
         const targetOffice = document.getElementById('filterOfficeSelect').value;
         const dateFrom = document.getElementById('dateFrom').value;
         const dateTo = document.getElementById('dateTo').value;
-        
         currentAggregationUnit = document.getElementById('aggregationUnit').value;
         currentBreakdownKey = document.getElementById('breakdownKey').value;
         currentTaxMode = document.getElementById('taxMode').value;
 
-        const accountCheckboxes = document.querySelectorAll('#accountCheckboxes input[type="checkbox"]:checked');
-        const selectedAccounts = Array.from(accountCheckboxes).map(cb => cb.value);
+        const selectedAccounts = Array.from(document.querySelectorAll('#accountCheckboxes input[type="checkbox"]:checked')).map(cb => cb.value);
+        const selectedItems = Array.from(document.querySelectorAll('#itemCheckboxes input[type="checkbox"]:checked')).map(cb => cb.value);
 
-        const itemCheckboxes = document.querySelectorAll('#itemCheckboxes input[type="checkbox"]:checked');
-        const selectedItems = Array.from(itemCheckboxes).map(cb => cb.value);
+        // Supabaseからデータを取得
+        let query = supabaseClient.from('sales_data').select('*');
+        if (targetOffice !== 'all') query = query.eq('office_id', targetOffice);
+        if (dateFrom) query = query.gte('sales_date', dateFrom);
+        if (dateTo) query = query.lte('sales_date', dateTo);
+        if (selectedAccounts.length > 0) query = query.in('account_name', selectedAccounts);
+        if (selectedItems.length > 0) query = query.in('item_name', selectedItems);
 
-        let combinedData = [];
-        
-        if (targetOffice === 'all') {
-            Object.keys(officeData).forEach(id => {
-                officeData[id].forEach(file => {
-                    combinedData = combinedData.concat(file.rows);
-                });
-            });
-        } else {
-            if (officeData[targetOffice]) {
-                officeData[targetOffice].forEach(file => {
-                    combinedData = combinedData.concat(file.rows);
-                });
-            }
-        }
+        const { data, error } = await query;
+        if (error) { alert('データ取得エラー: ' + error.message); return; }
 
-        const filteredData = combinedData.filter(row => {
-            const salesDate = row['売上日'] || '';
-            if (dateFrom && salesDate < dateFrom) return false;
-            if (dateTo && salesDate > dateTo) return false;
-            if (selectedAccounts.length > 0 && !selectedAccounts.includes(row['勘定科目名'])) return false;
-            if (selectedItems.length > 0 && !selectedItems.includes(row['費目名称'])) return false;
-            return true;
-        });
-
-        currentFilteredData = filteredData; 
-        displayData(filteredData);
-        updateAllCharts(); 
+        // テーブル表示用に row_data を取り出す
+        currentFilteredData = data.map(d => d.row_data);
+        displayData(currentFilteredData);
+        updateAllCharts();
     }
 
     function parseNumber(str) {
@@ -786,33 +586,25 @@
         const tableHead = document.getElementById('tableHead');
         const tableBody = document.getElementById('tableBody');
         const summaryArea = document.getElementById('summaryArea');
-        
         tableHead.innerHTML = '';
         tableBody.innerHTML = '';
 
         if (data.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="22" class="text-center">該当するデータがありません</td></tr>';
-            summaryArea.innerHTML = `
-                <div class="col-md-4"><div class="card text-white bg-success shadow-sm"><div class="card-body"><h6 class="card-title">合計売上額</h6><h4>¥0</h4></div></div></div>
-                <div class="col-md-4"><div class="card text-white bg-info shadow-sm"><div class="card-body"><h6 class="card-title">対象データ数</h6><h4>0 件</h4></div></div></div>
-            `;
+            summaryArea.innerHTML = `<div class="col-md-4"><div class="card text-white bg-success shadow-sm"><div class="card-body"><h6 class="card-title">合計売上額</h6><h4>¥0</h4></div></div></div><div class="col-md-4"><div class="card text-white bg-info shadow-sm"><div class="card-body"><h6 class="card-title">対象データ数</h6><h4>0 件</h4></div></div></div>`;
             return;
         }
 
         const headers = Object.keys(data[0]);
-        headers.forEach(h => { tableHead.innerHTML += `<th>${h}</th>`; });
-
-        const displayLimit = 100;
-        data.slice(0, displayLimit).forEach(row => {
+        headers.forEach(h => tableHead.innerHTML += `<th>${h}</th>`);
+        data.slice(0, 100).forEach(row => {
             let rowHtml = '<tr>';
-            headers.forEach(h => { rowHtml += `<td>${row[h]}</td>`; });
-            rowHtml += '</tr>';
-            tableBody.innerHTML += rowHtml;
+            headers.forEach(h => rowHtml += `<td>${row[h]}</td>`);
+            tableBody.innerHTML += rowHtml + '</tr>';
         });
 
         let total = 0;
-        data.forEach(row => { total += getSalesAmount(row); });
-
+        data.forEach(row => total += getSalesAmount(row));
         let officeTotals = {};
         data.forEach(row => {
             const oId = row['事業所ID'];
@@ -820,128 +612,45 @@
             officeTotals[oId] += getSalesAmount(row);
         });
 
-        let summaryHtml = `
-            <div class="col-md-4">
-                <div class="card text-white bg-success shadow-sm">
-                    <div class="card-body">
-                        <h6 class="card-title">合計売上額 (${currentTaxMode === 'included' ? '税込み' : '税抜き'})</h6>
-                        <h4>¥${total.toLocaleString()}</h4>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card text-white bg-info shadow-sm">
-                    <div class="card-body">
-                        <h6 class="card-title">対象データ数</h6>
-                        <h4>${data.length} 件</h4>
-                    </div>
-                </div>
-            </div>
-        `;
-
+        let summaryHtml = `<div class="col-md-4"><div class="card text-white bg-success shadow-sm"><div class="card-body"><h6 class="card-title">合計売上額 (${currentTaxMode === 'included' ? '税込み' : '税抜き'})</h6><h4>¥${total.toLocaleString()}</h4></div></div></div><div class="col-md-4"><div class="card text-white bg-info shadow-sm"><div class="card-body"><h6 class="card-title">対象データ数</h6><h4>${data.length} 件</h4></div></div></div>`;
         offices.forEach(o => {
             if (officeTotals[o.id] !== undefined) {
-                summaryHtml += `
-                    <div class="col-md-4 mt-2">
-                        <div class="card text-white bg-secondary shadow-sm">
-                            <div class="card-body">
-                                <h6 class="card-title">${o.name} の売上</h6>
-                                <h4>¥${officeTotals[o.id].toLocaleString()}</h4>
-                            </div>
-                        </div>
-                    </div>
-                `;
+                summaryHtml += `<div class="col-md-4 mt-2"><div class="card text-white bg-secondary shadow-sm"><div class="card-body"><h6 class="card-title">${o.name} の売上</h6><h4>¥${officeTotals[o.id].toLocaleString()}</h4></div></div></div>`;
             }
         });
-
         summaryArea.innerHTML = summaryHtml;
     }
 
-    // ==========================================
-    // グラフ管理ロジック
-    // ==========================================
-
     function addChart(type) {
-        if (charts.length >= 100) {
-            alert('グラフは最大100個までしか追加できません。');
-            return;
-        }
-
+        if (charts.length >= 100) { alert('グラフは最大100個までしか追加できません。'); return; }
         chartCounter++;
         const chartId = 'chartCanvas_' + chartCounter;
         const container = document.getElementById('chartsContainer');
-        
-        if (container.querySelector('p')) {
-            container.innerHTML = '';
-        }
-
+        if (container.querySelector('p')) container.innerHTML = '';
         const chartBox = document.createElement('div');
         chartBox.className = 'card shadow-sm';
         chartBox.style.width = '48%';
         chartBox.style.height = '320px';
-        chartBox.innerHTML = `
-            <div class="card-header d-flex justify-content-between align-items-center py-1">
-                <small class="fw-bold">${getChartTitle(type)}</small>
-                <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeChart('${chartId}', this)">×</button>
-            </div>
-            <div class="card-body p-2" style="height: calc(100% - 35px);">
-                <canvas id="${chartId}"></canvas>
-            </div>
-        `;
+        chartBox.innerHTML = `<div class="card-header d-flex justify-content-between align-items-center py-1"><small class="fw-bold">${getChartTitle(type)}</small><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeChart('${chartId}', this)">×</button></div><div class="card-body p-2" style="height: calc(100% - 35px);"><canvas id="${chartId}"></canvas></div>`;
         container.appendChild(chartBox);
 
         const ctx = document.getElementById(chartId).getContext('2d');
-        const chartData = getChartData(type, currentFilteredData);
-        
-        const tooltipConfig = {
-            responsive: true, 
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: type === 'pie' },
-                tooltip: {
-                    callbacks: {
-                        afterBody: function(context) {
-                            const label = context[0].label;
-                            const breakdown = context[0].chart.data.breakdownData[label];
-                            if (!breakdown) return '';
-                            
-                            let lines = ['----- 内訳 -----'];
-                            for (const key in breakdown) {
-                                lines.push(`${key}: ¥${breakdown[key].toLocaleString()}`);
-                            }
-                            return lines;
-                        }
-                    }
-                }
-            }
-        };
-
         const newChart = new Chart(ctx, {
             type: type,
-            data: chartData,
-            options: tooltipConfig
+            data: getChartData(type, currentFilteredData),
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type === 'pie' }, tooltip: { callbacks: { afterBody: function(context) { const label = context[0].label; const breakdown = context[0].chart.data.breakdownData[label]; if (!breakdown) return ''; let lines = ['----- 内訳 -----']; for (const key in breakdown) lines.push(`${key}: ¥${breakdown[key].toLocaleString()}`); return lines; } } } } }
         });
-
         charts.push({ id: chartId, chartObj: newChart, type: type });
     }
 
     function removeChart(id, btn) {
         charts = charts.filter(c => c.id !== id);
-        const chartBox = btn.closest('.card');
-        chartBox.remove();
-
-        const container = document.getElementById('chartsContainer');
-        if (charts.length === 0) {
-            container.innerHTML = '<p style="color: #ccc; width: 100%; text-align: center; margin-top: 50px;">右上のボタンからグラフを追加してください</p>';
-        }
+        btn.closest('.card').remove();
+        if (charts.length === 0) document.getElementById('chartsContainer').innerHTML = '<p style="color: #ccc; width: 100%; text-align: center; margin-top: 50px;">右上のボタンからグラフを追加してください</p>';
     }
 
     function getChartTitle(type) {
-        let unitText = '';
-        if (currentAggregationUnit === 'day') unitText = '日ごと';
-        if (currentAggregationUnit === 'month') unitText = '月ごと';
-        if (currentAggregationUnit === 'year') unitText = '年ごと';
-
+        let unitText = currentAggregationUnit === 'day' ? '日ごと' : (currentAggregationUnit === 'month' ? '月ごと' : '年ごと');
         if (type === 'bar') return `📊 ${unitText}の売上`;
         if (type === 'line') return `📈 ${unitText}の売上`;
         if (type === 'pie') return '🥧 費目名称ごとの売上';
@@ -951,161 +660,70 @@
     function getChartData(type, data) {
         const totals = {};
         const breakdowns = {}; 
-        
-        let keyName = '';
-        let breakdownKeyName = currentBreakdownKey; 
-        
-        if (type === 'bar' || type === 'line') {
-            keyName = '売上日';
-        } else if (type === 'pie') {
-            keyName = '費目名称';
-        }
-
+        let keyName = (type === 'bar' || type === 'line') ? '売上日' : '費目名称';
         data.forEach(row => {
             let key = row[keyName] || '不明';
-            
             if (keyName === '売上日' && key !== '不明') {
-                if (currentAggregationUnit === 'month') {
-                    key = key.substring(0, 7); 
-                } else if (currentAggregationUnit === 'year') {
-                    key = key.substring(0, 4); 
-                }
+                if (currentAggregationUnit === 'month') key = key.substring(0, 7); 
+                else if (currentAggregationUnit === 'year') key = key.substring(0, 4); 
             }
-
-            const bKey = row[breakdownKeyName] || '不明';
+            const bKey = row[currentBreakdownKey] || '不明';
             const val = getSalesAmount(row);
-            
             totals[key] = (totals[key] || 0) + val;
-            
             if (!breakdowns[key]) breakdowns[key] = {};
             breakdowns[key][bKey] = (breakdowns[key][bKey] || 0) + val;
         });
-
         let labels = Object.keys(totals);
-        if (type === 'bar' || type === 'line') {
-            labels.sort(); 
-        }
-
+        if (type === 'bar' || type === 'line') labels.sort(); 
         const values = labels.map(l => totals[l]);
-
-        const colors = [
-            'rgba(255, 99, 132, 0.6)',
-            'rgba(54, 162, 235, 0.6)',
-            'rgba(255, 206, 86, 0.6)',
-            'rgba(75, 192, 192, 0.6)',
-            'rgba(153, 102, 255, 0.6)',
-            'rgba(255, 159, 64, 0.6)'
-        ];
-
-        return {
-            labels: labels,
-            datasets: [{
-                label: '売上額',
-                data: values,
-                backgroundColor: type === 'line' ? 'rgba(54, 162, 235, 0.2)' : colors.slice(0, labels.length),
-                borderColor: type === 'line' ? 'rgba(54, 162, 235, 1)' : 'rgba(255, 255, 255, 1)',
-                borderWidth: 1
-            }],
-            breakdownData: breakdowns 
-        };
+        const colors = ['rgba(255, 99, 132, 0.6)', 'rgba(54, 162, 235, 0.6)', 'rgba(255, 206, 86, 0.6)', 'rgba(75, 192, 192, 0.6)', 'rgba(153, 102, 255, 0.6)', 'rgba(255, 159, 64, 0.6)'];
+        return { labels, datasets: [{ label: '売上額', data: values, backgroundColor: type === 'line' ? 'rgba(54, 162, 235, 0.2)' : colors.slice(0, labels.length), borderColor: type === 'line' ? 'rgba(54, 162, 235, 1)' : 'rgba(255, 255, 255, 1)', borderWidth: 1 }], breakdownData: breakdowns };
     }
 
     function updateAllCharts() {
-        charts.forEach(c => {
-            const newData = getChartData(c.type, currentFilteredData);
-            c.chartObj.data = newData;
-            c.chartObj.update();
-        });
+        charts.forEach(c => { c.chartObj.data = getChartData(c.type, currentFilteredData); c.chartObj.update(); });
     }
-
-    // ==========================================
-    // Supabase連携の保存・読み込みロジック
-    // ==========================================
 
     async function saveDashboard() {
         const title = document.getElementById('dashboardTitle').value || '無題のダッシュボード';
         const shareMode = document.getElementById('shareMode').value;
         const chartTypes = charts.map(c => c.type);
-
-        const dashboardData = {
-            title: title,
-            share_mode: shareMode,
-            charts: chartTypes
-        };
-
+        const dashboardData = { title, share_mode: shareMode, charts: chartTypes };
         try {
             let data, error;
-            
             if (currentDashboardId) {
-                ({ data, error } = await supabaseClient
-                    .from('sales_dashboards')
-                    .update(dashboardData)
-                    .eq('id', currentDashboardId)
-                    .select());
+                ({ data, error } = await supabaseClient.from('sales_dashboards').update(dashboardData).eq('id', currentDashboardId).select());
             } else {
-                ({ data, error } = await supabaseClient
-                    .from('sales_dashboards')
-                    .insert(dashboardData)
-                    .select());
+                ({ data, error } = await supabaseClient.from('sales_dashboards').insert(dashboardData).select());
             }
-
             if (error) throw error;
-
-            if (data && data.length > 0) {
-                currentDashboardId = data[0].id;
-                localStorage.setItem('currentDashboardId', currentDashboardId);
-            }
-
+            if (data && data.length > 0) { currentDashboardId = data[0].id; localStorage.setItem('currentDashboardId', currentDashboardId); }
             alert('ダッシュボードをSupabaseに保存しました！\n（タイトル: ' + title + '）\n\n共有用URL:\n' + window.location.origin + window.location.pathname + '?dashboard=' + currentDashboardId);
-            
-        } catch (error) {
-            console.error('保存エラー:', error);
-            alert('保存に失敗しました: ' + error.message);
-        }
+        } catch (error) { alert('保存に失敗しました: ' + error.message); }
     }
 
     async function loadDashboard() {
         if (!currentDashboardId) return;
-
         try {
-            const { data, error } = await supabaseClient
-                .from('sales_dashboards')
-                .select('*')
-                .eq('id', currentDashboardId)
-                .single();
-
+            const { data, error } = await supabaseClient.from('sales_dashboards').select('*').eq('id', currentDashboardId).single();
             if (error) throw error;
-
             if (data) {
                 document.getElementById('dashboardTitle').value = data.title || '';
                 document.getElementById('shareMode').value = data.share_mode || 'private';
-
-                if (data.charts && data.charts.length > 0) {
-                    data.charts.forEach(type => {
-                        addChart(type);
-                    });
-                }
+                if (data.charts && data.charts.length > 0) data.charts.forEach(type => addChart(type));
             }
-        } catch (error) {
-            console.error('読み込みエラー:', error);
-        }
+        } catch (error) {}
     }
 
     function newDashboard() {
         if (!confirm('現在のダッシュボードをクリアして新規作成しますか？')) return;
-        
-        const container = document.getElementById('chartsContainer');
-        container.innerHTML = '<p style="color: #ccc; width: 100%; text-align: center; margin-top: 50px;">右上のボタンからグラフを追加してください</p>';
+        document.getElementById('chartsContainer').innerHTML = '<p style="color: #ccc; width: 100%; text-align: center; margin-top: 50px;">右上のボタンからグラフを追加してください</p>';
         charts = [];
-        
         document.getElementById('dashboardTitle').value = '';
         document.getElementById('shareMode').value = 'private';
-        
         currentDashboardId = null;
         localStorage.removeItem('currentDashboardId');
     }
 </script>
 </body>
 </html>
-
-
