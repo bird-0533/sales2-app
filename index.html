@@ -241,14 +241,18 @@
     let currentDashboardId = null; 
     let currentUser = null;
 
-    // ★追加：Supabaseから全件取得するためのページネーションヘルパー
+    // ★修正：1回の取得件数を500件に減らし、エラー詳細を出すように修正
     async function fetchAllData(query) {
         let allData = [];
         let from = 0;
-        const limit = 1000;
+        const limit = 500; 
         while (true) {
             const { data, error } = await query.range(from, from + limit - 1);
-            if (error) throw error;
+            if (error) {
+                console.error('Supabase Error:', error);
+                alert('データ取得エラー詳細:\n' + error.message + '\n\nヒント: ' + (error.hint || 'なし'));
+                throw error;
+            }
             if (data.length === 0) break;
             allData = allData.concat(data);
             if (data.length < limit) break;
@@ -494,12 +498,11 @@
     }
 
     async function initializeFilters() {
-        // ★修正：全件取得する
         const query = supabaseClient.from('sales_data').select('account_name, item_name');
         let data = [];
         try {
             data = await fetchAllData(query);
-        } catch (error) { console.error('Filter init error', error); return; }
+        } catch (error) { return; }
 
         const accounts = new Set();
         const items = new Set();
@@ -544,11 +547,10 @@
         if (selectedAccounts.length > 0) query = query.in('account_name', selectedAccounts);
         if (selectedItems.length > 0) query = query.in('item_name', selectedItems);
 
-        // ★修正：全件取得する
         let data = [];
         try {
             data = await fetchAllData(query);
-        } catch (error) { alert('データ取得エラー: ' + error.message); return; }
+        } catch (error) { return; }
 
         currentFilteredData = data.map(d => d.row_data);
         displayData(currentFilteredData);
