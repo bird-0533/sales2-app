@@ -530,7 +530,6 @@
         const isAllItemsSelected = allItemCheckboxes.length > 0 && allItemCheckboxes.length === selectedItemCheckboxes.length;
         const selectedItems = Array.from(selectedItemCheckboxes).map(cb => cb.value);
 
-        // ★修正：SupabaseのRPC関数を呼び出して集計済みデータを取得
         const params = {
             p_office_id: targetOffice === 'all' ? null : targetOffice,
             p_date_from: dateFrom,
@@ -543,7 +542,6 @@
             return;
         }
 
-        // JavaScript側で科目・費目のチェックボックスによるフィルタリング
         let filteredData = data;
         if (!isAllAccountsSelected && selectedAccounts.length > 0) {
             filteredData = filteredData.filter(row => selectedAccounts.includes(row.account_name));
@@ -565,7 +563,7 @@
     }
 
     function getSalesAmount(row) {
-        const total = row.total_amount || 0; // ★修正：total_amountを使用
+        const total = row.total_amount || 0;
         if (currentTaxMode === 'excluded') {
             const tax = row.tax_amount || 0;
             return total - tax;
@@ -592,7 +590,7 @@
             '売上日': 'sales_date',
             '勘定科目名': 'account_name',
             '費目名称': 'item_name',
-            '売上額': 'total_amount', // ★修正
+            '売上額': 'total_amount',
             '売上額（税）': 'tax_amount'
         };
         
@@ -638,11 +636,47 @@
         container.appendChild(chartBox);
 
         const ctx = document.getElementById(chartId).getContext('2d');
+        const chartData = getChartData(type, currentFilteredData);
+        
+        // ★修正：内訳表示を事業所ごとに対応させる
+        const tooltipConfig = {
+            responsive: true, 
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: type === 'pie' ? true : true }, // 比較グラフの凡例を表示
+                tooltip: {
+                    callbacks: {
+                        afterBody: function(context) {
+                            const datasetIndex = context[0].datasetIndex;
+                            const label = context[0].label;
+                            const breakdown = context[0].chart.data.breakdownData;
+                            
+                            let targetBreakdown = null;
+                            if (type === 'pie') {
+                                targetBreakdown = breakdown.all ? breakdown.all[label] : null;
+                            } else {
+                                targetBreakdown = breakdown[datasetIndex] ? breakdown[datasetIndex][label] : null;
+                            }
+
+                            if (!targetBreakdown) return '';
+                            
+                            let lines = ['----- 内訳 -----'];
+                            for (const key in targetBreakdown) {
+                                lines.push(`${key}: ¥${targetBreakdown[key].toLocaleString()}`);
+                            }
+                            return lines;
+                        }
+                    }
+                }
+            }
+        };
+
         const newChart = new Chart(ctx, {
             type: type,
-            data: getChartData(type, currentFilteredData),
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type === 'pie' }, tooltip: { callbacks: { afterBody: function(context) { const label = context[0].label; const breakdown = context[0].chart.data.breakdownData[label]; if (!breakdown) return ''; let lines = ['----- 内訳 -----']; for (const key in breakdown) lines.push(`${key}: ¥${breakdown[key].toLocaleString()}`); return lines; } } } } }
+            data: chartData,
+            options: tooltipConfig
         });
+
         charts.push({ id: chartId, chartObj: newChart, type: type });
     }
 
@@ -654,35 +688,93 @@
 
     function getChartTitle(type) {
         let unitText = currentAggregationUnit === 'day' ? '日ごと' : (currentAggregationUnit === 'month' ? '月ごと' : '年ごと');
-        if (type === 'bar') return `📊 ${unitText}の売上`;
-        if (type === 'line') return `📈 ${unitText}の売上`;
+        if (type === 'bar') return `📊 ${unitText}の売上（事業所比較）`;
+        if (type === 'line') return `📈 ${unitText}の売上（事業所比較）`;
         if (type === 'pie') return '🥧 費目名称ごとの売上';
         return 'グラフ';
     }
 
     function getChartData(type, data) {
-        const totals = {};
-        const breakdowns = {}; 
-        let keyName = (type === 'bar' || type === 'line') ? 'sales_date' : 'item_name';
-        let breakdownKeyName = currentBreakdownKey === '勘定科目名' ? 'account_name' : 'item_name';
+        const colors = ['rgba(255, 99, 132, 0.6)', 'rgba(54, 162, 235, 0.6)', 'rgba(255, 206, 86, 0.6)', 'rgba(75, 192, 192, 0.6)', 'rgba(153, 102, 255, 0.6)', 'rgba(255, 159, 64, 0.6)'];
+        const breakdowns = {}; // ツールチップ用の内訳データ格納庫
+
+        // 円グラフの場合（費目名称ごと、全事業所合計）
+        if (type === 'pie') {
+            const totals = {};
+            breakdowns.all = {}; // 円グラフ用のキー
+            
+            data.forEach(row => {
+                let key = row.item_name || '不明';
+                const bKey = row[currentBreakdownKey === '勘定科目名' ? 'account_name' : 'item_name'] || '不明';
+                const val = getSalesAmount(row);
+                
+                totals[key] = (totals[key] || 0) + val;
+                if (!breakdowns.all[key]) breakdowns.all[key] = {};
+                breakdowns.all[key][bKey] = (breakdowns.all[key][bKey] || 0) + val;
+            });
+            
+            let labels = Object.keys(totals);
+            const values = labels.map(l => totals[l]);
+            
+            return { 
+                labels, 
+                datasets: [{ label: '売上額', data: values, backgroundColor: colors.slice(0, labels.length), borderColor: 'rgba(255, 255, 255, 1)', borderWidth: 1 }], 
+                breakdownData: breakdowns 
+            };
+        }
+
+        // 棒グラフ・折れ線グラフの場合（事業所ごとに比較）
+        const officeIds = [...new Set(data.map(row => row.office_id))];
+        let allDates = new Set();
         
         data.forEach(row => {
-            let key = row[keyName] || '不明';
-            if (keyName === 'sales_date' && key !== '不明') {
+            let key = row.sales_date || '不明';
+            if (key !== '不明') {
                 if (currentAggregationUnit === 'month') key = key.substring(0, 7); 
                 else if (currentAggregationUnit === 'year') key = key.substring(0, 4); 
             }
-            const bKey = row[breakdownKeyName] || '不明';
-            const val = getSalesAmount(row);
-            totals[key] = (totals[key] || 0) + val;
-            if (!breakdowns[key]) breakdowns[key] = {};
-            breakdowns[key][bKey] = (breakdowns[key][bKey] || 0) + val;
+            allDates.add(key);
         });
-        let labels = Object.keys(totals);
-        if (type === 'bar' || type === 'line') labels.sort(); 
-        const values = labels.map(l => totals[l]);
-        const colors = ['rgba(255, 99, 132, 0.6)', 'rgba(54, 162, 235, 0.6)', 'rgba(255, 206, 86, 0.6)', 'rgba(75, 192, 192, 0.6)', 'rgba(153, 102, 255, 0.6)', 'rgba(255, 159, 64, 0.6)'];
-        return { labels, datasets: [{ label: '売上額', data: values, backgroundColor: type === 'line' ? 'rgba(54, 162, 235, 0.2)' : colors.slice(0, labels.length), borderColor: type === 'line' ? 'rgba(54, 162, 235, 1)' : 'rgba(255, 255, 255, 1)', borderWidth: 1 }], breakdownData: breakdowns };
+        
+        let labels = Array.from(allDates);
+        labels.sort(); // 日付順にソート
+        
+        const datasets = [];
+        
+        officeIds.forEach((officeId, index) => {
+            const officeData = {};
+            breakdowns[index] = {}; // 事業所（datasetIndex）ごとの内訳
+            
+            data.filter(row => row.office_id === officeId).forEach(row => {
+                let key = row.sales_date || '不明';
+                if (key !== '不明') {
+                    if (currentAggregationUnit === 'month') key = key.substring(0, 7); 
+                    else if (currentAggregationUnit === 'year') key = key.substring(0, 4); 
+                }
+                
+                const bKey = row[currentBreakdownKey === '勘定科目名' ? 'account_name' : 'item_name'] || '不明';
+                const val = getSalesAmount(row);
+                
+                officeData[key] = (officeData[key] || 0) + val;
+                
+                if (!breakdowns[index][key]) breakdowns[index][key] = {};
+                breakdowns[index][key][bKey] = (breakdowns[index][key][bKey] || 0) + val;
+            });
+            
+            const values = labels.map(l => officeData[l] || 0);
+            const officeName = offices.find(o => o.id === officeId)?.name || officeId;
+            const color = colors[index % colors.length];
+            
+            datasets.push({
+                label: officeName,
+                data: values,
+                backgroundColor: type === 'line' ? color.replace('0.6', '0.2') : color,
+                borderColor: type === 'line' ? color.replace('0.6', '1') : 'rgba(255, 255, 255, 1)',
+                borderWidth: 1
+            });
+        });
+
+        return { labels, datasets, breakdownData: breakdowns };
     }
 
     function updateAllCharts() {
