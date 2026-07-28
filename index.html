@@ -241,7 +241,7 @@
     let currentDashboardId = null; 
     let currentUser = null;
 
-    // ★修正：取得する列を必要なものだけに絞る
+    // ★修正：1回の取得件数を1000件に戻し、エラーログを詳細化
     async function fetchAllData(query) {
         let allData = [];
         let from = 0;
@@ -250,7 +250,7 @@
             const { data, error } = await query.range(from, from + limit - 1);
             if (error) {
                 console.error('Supabase Error:', error);
-                alert('データ取得エラー詳細:\n' + error.message + '\n\nヒント: ' + (error.hint || 'なし'));
+                alert('データ取得エラー詳細:\n' + JSON.stringify(error, null, 2));
                 throw error;
             }
             if (data.length === 0) break;
@@ -471,7 +471,6 @@
             item_name: row['費目名称'],
             sales_amount: parseNumber(row['売上額']),
             tax_amount: parseNumber(row['売上額（税）'])
-            // ★修正：row_data は保存しない（データサイズ削減）
         }));
 
         const chunkSize = 1000;
@@ -498,7 +497,6 @@
     }
 
     async function initializeFilters() {
-        // ★修正：全件取得する際、必要な列だけ取得する
         const query = supabaseClient.from('sales_data').select('account_name, item_name');
         let data = [];
         try {
@@ -538,16 +536,29 @@
         currentBreakdownKey = document.getElementById('breakdownKey').value;
         currentTaxMode = document.getElementById('taxMode').value;
 
-        const selectedAccounts = Array.from(document.querySelectorAll('#accountCheckboxes input[type="checkbox"]:checked')).map(cb => cb.value);
-        const selectedItems = Array.from(document.querySelectorAll('#itemCheckboxes input[type="checkbox"]:checked')).map(cb => cb.value);
+        // ★修正：全選択状態かどうかを判定し、全選択なら in フィルタを使わない
+        const allAccountCheckboxes = document.querySelectorAll('#accountCheckboxes input[type="checkbox"]');
+        const selectedAccountCheckboxes = document.querySelectorAll('#accountCheckboxes input[type="checkbox"]:checked');
+        const isAllAccountsSelected = allAccountCheckboxes.length > 0 && allAccountCheckboxes.length === selectedAccountCheckboxes.length;
+        const selectedAccounts = Array.from(selectedAccountCheckboxes).map(cb => cb.value);
 
-        // ★修正：row_data ではなく、必要な列を直接取得する
+        const allItemCheckboxes = document.querySelectorAll('#itemCheckboxes input[type="checkbox"]');
+        const selectedItemCheckboxes = document.querySelectorAll('#itemCheckboxes input[type="checkbox"]:checked');
+        const isAllItemsSelected = allItemCheckboxes.length > 0 && allItemCheckboxes.length === selectedItemCheckboxes.length;
+        const selectedItems = Array.from(selectedItemCheckboxes).map(cb => cb.value);
+
         let query = supabaseClient.from('sales_data').select('office_id, sales_date, account_name, item_name, sales_amount, tax_amount');
         if (targetOffice !== 'all') query = query.eq('office_id', targetOffice);
         if (dateFrom) query = query.gte('sales_date', dateFrom);
         if (dateTo) query = query.lte('sales_date', dateTo);
-        if (selectedAccounts.length > 0) query = query.in('account_name', selectedAccounts);
-        if (selectedItems.length > 0) query = query.in('item_name', selectedItems);
+        
+        // 全選択でない場合のみ in フィルタを使用する
+        if (!isAllAccountsSelected && selectedAccounts.length > 0) {
+            query = query.in('account_name', selectedAccounts);
+        }
+        if (!isAllItemsSelected && selectedItems.length > 0) {
+            query = query.in('item_name', selectedItems);
+        }
 
         let data = [];
         try {
@@ -588,7 +599,6 @@
             return;
         }
 
-        // ★修正：表示する列を主要な列に絞る
         const headers = ['事業所ID', '売上日', '勘定科目名', '費目名称', '売上額', '売上額（税）'];
         const headerMap = {
             '事業所ID': 'office_id',
@@ -666,8 +676,8 @@
     function getChartData(type, data) {
         const totals = {};
         const breakdowns = {}; 
-        let keyName = (type === 'bar' || type === 'line') ? 'sales_date' : 'item_name'; // ★修正
-        let breakdownKeyName = currentBreakdownKey === '勘定科目名' ? 'account_name' : 'item_name'; // ★修正
+        let keyName = (type === 'bar' || type === 'line') ? 'sales_date' : 'item_name';
+        let breakdownKeyName = currentBreakdownKey === '勘定科目名' ? 'account_name' : 'item_name';
         
         data.forEach(row => {
             let key = row[keyName] || '不明';
