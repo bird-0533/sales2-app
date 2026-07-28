@@ -241,11 +241,11 @@
     let currentDashboardId = null; 
     let currentUser = null;
 
-    // ★修正：1回の取得件数を500件に減らし、エラー詳細を出すように修正
+    // ★修正：取得する列を必要なものだけに絞る
     async function fetchAllData(query) {
         let allData = [];
         let from = 0;
-        const limit = 500; 
+        const limit = 1000; 
         while (true) {
             const { data, error } = await query.range(from, from + limit - 1);
             if (error) {
@@ -470,8 +470,8 @@
             account_name: row['勘定科目名'],
             item_name: row['費目名称'],
             sales_amount: parseNumber(row['売上額']),
-            tax_amount: parseNumber(row['売上額（税）']),
-            row_data: row
+            tax_amount: parseNumber(row['売上額（税）'])
+            // ★修正：row_data は保存しない（データサイズ削減）
         }));
 
         const chunkSize = 1000;
@@ -498,6 +498,7 @@
     }
 
     async function initializeFilters() {
+        // ★修正：全件取得する際、必要な列だけ取得する
         const query = supabaseClient.from('sales_data').select('account_name, item_name');
         let data = [];
         try {
@@ -540,7 +541,8 @@
         const selectedAccounts = Array.from(document.querySelectorAll('#accountCheckboxes input[type="checkbox"]:checked')).map(cb => cb.value);
         const selectedItems = Array.from(document.querySelectorAll('#itemCheckboxes input[type="checkbox"]:checked')).map(cb => cb.value);
 
-        let query = supabaseClient.from('sales_data').select('*');
+        // ★修正：row_data ではなく、必要な列を直接取得する
+        let query = supabaseClient.from('sales_data').select('office_id, sales_date, account_name, item_name, sales_amount, tax_amount');
         if (targetOffice !== 'all') query = query.eq('office_id', targetOffice);
         if (dateFrom) query = query.gte('sales_date', dateFrom);
         if (dateTo) query = query.lte('sales_date', dateTo);
@@ -552,7 +554,7 @@
             data = await fetchAllData(query);
         } catch (error) { return; }
 
-        currentFilteredData = data.map(d => d.row_data);
+        currentFilteredData = data;
         displayData(currentFilteredData);
         updateAllCharts();
     }
@@ -565,9 +567,9 @@
     }
 
     function getSalesAmount(row) {
-        const total = parseNumber(row['売上額']);
+        const total = row.sales_amount || 0;
         if (currentTaxMode === 'excluded') {
-            const tax = parseNumber(row['売上額（税）']);
+            const tax = row.tax_amount || 0;
             return total - tax;
         }
         return total;
@@ -581,16 +583,29 @@
         tableBody.innerHTML = '';
 
         if (data.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="22" class="text-center">該当するデータがありません</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="6" class="text-center">該当するデータがありません</td></tr>';
             summaryArea.innerHTML = `<div class="col-md-4"><div class="card text-white bg-success shadow-sm"><div class="card-body"><h6 class="card-title">合計売上額</h6><h4>¥0</h4></div></div></div><div class="col-md-4"><div class="card text-white bg-info shadow-sm"><div class="card-body"><h6 class="card-title">対象データ数</h6><h4>0 件</h4></div></div></div>`;
             return;
         }
 
-        const headers = Object.keys(data[0]);
+        // ★修正：表示する列を主要な列に絞る
+        const headers = ['事業所ID', '売上日', '勘定科目名', '費目名称', '売上額', '売上額（税）'];
+        const headerMap = {
+            '事業所ID': 'office_id',
+            '売上日': 'sales_date',
+            '勘定科目名': 'account_name',
+            '費目名称': 'item_name',
+            '売上額': 'sales_amount',
+            '売上額（税）': 'tax_amount'
+        };
+        
         headers.forEach(h => tableHead.innerHTML += `<th>${h}</th>`);
+        
         data.slice(0, 100).forEach(row => {
             let rowHtml = '<tr>';
-            headers.forEach(h => rowHtml += `<td>${row[h]}</td>`);
+            headers.forEach(h => {
+                rowHtml += `<td>${row[headerMap[h]] || ''}</td>`;
+            });
             tableBody.innerHTML += rowHtml + '</tr>';
         });
 
@@ -598,7 +613,7 @@
         data.forEach(row => total += getSalesAmount(row));
         let officeTotals = {};
         data.forEach(row => {
-            const oId = row['事業所ID'];
+            const oId = row.office_id;
             if (!officeTotals[oId]) officeTotals[oId] = 0;
             officeTotals[oId] += getSalesAmount(row);
         });
@@ -651,14 +666,16 @@
     function getChartData(type, data) {
         const totals = {};
         const breakdowns = {}; 
-        let keyName = (type === 'bar' || type === 'line') ? '売上日' : '費目名称';
+        let keyName = (type === 'bar' || type === 'line') ? 'sales_date' : 'item_name'; // ★修正
+        let breakdownKeyName = currentBreakdownKey === '勘定科目名' ? 'account_name' : 'item_name'; // ★修正
+        
         data.forEach(row => {
             let key = row[keyName] || '不明';
-            if (keyName === '売上日' && key !== '不明') {
+            if (keyName === 'sales_date' && key !== '不明') {
                 if (currentAggregationUnit === 'month') key = key.substring(0, 7); 
                 else if (currentAggregationUnit === 'year') key = key.substring(0, 4); 
             }
-            const bKey = row[currentBreakdownKey] || '不明';
+            const bKey = row[breakdownKeyName] || '不明';
             const val = getSalesAmount(row);
             totals[key] = (totals[key] || 0) + val;
             if (!breakdowns[key]) breakdowns[key] = {};
