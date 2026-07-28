@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>売上分析ダッシュボード</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-light">
+
+<!-- ログイン画面 -->
+<div id="loginScreen" style="display: flex; align-items: center; justify-content: center; height: 100vh;">
+    <div class="card shadow" style="width: 350px;">
+        <div class="card-body">
+            <h3 class="text-center mb-4">ログイン</h3>
+            <div class="mb-3">
+                <input type="text" class="form-control" id="loginUsername" placeholder="ユーザーID">
+            </div>
+            <div class="mb-3">
+                <input type="password" class="form-control" id="loginPassword" placeholder="パスワード">
+            </div>
+            <button class="btn btn-primary w-100" onclick="login()">ログイン</button>
+        </div>
+    </div>
+</div>
+
+<!-- メインアプリ画面 -->
+<div id="mainApp" style="display: none;" class="container-fluid p-4">
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-body d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <input type="text" class="form-control form-control-lg" id="dashboardTitle" placeholder="ダッシュボード名を入力..." style="width: 300px; font-weight: bold;">
+                <select class="form-select form-select-sm" id="shareMode" style="width: 120px;">
+                    <option value="private">個人用</option>
+                    <option value="shared">共有用</option>
+                </select>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-dark" id="userManageBtn" onclick="openUserModal()" style="display: none;">👥 ユーザー管理</button>
+                <!-- ★追加：アカウント設定ボタン -->
+                <button class="btn btn-outline-primary" onclick="openAccountModal()">⚙️ アカウント設定</button>
+                <button class="btn btn-primary" onclick="saveDashboard()">💾 Supabaseに保存</button>
+                <button class="btn btn-outline-secondary" onclick="newDashboard()">🆕 新規作成</button>
+                <button class="btn btn-danger" onclick="logout()">ログアウト</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card shadow-sm mb-3" id="officeManagementCard" style="display: none;">
+                <div class="card-header bg-dark text-white">事業所管理</div>
+                <div class="card-body">
+                    <div class="input-group input-group-sm mb-2">
+                        <input type="number" class="form-control" id="newOfficeId" placeholder="番号" style="max-width: 70px;">
+                        <input type="text" class="form-control" id="newOfficeName" placeholder="事業所名">
+                        <button class="btn btn-sm btn-primary" onclick="addOffice()">追加</button>
+                    </div>
+                    <ul id="officeList" class="list-group" style="font-size: 14px;"></ul>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3" id="uploadCard" style="display: none;">
+                <div class="card-header bg-primary text-white">1. データアップロード</div>
+                <div class="card-body">
+                    <select class="form-select mb-2" id="uploadOfficeSelect">
+                        <option value="">アップロード先を選択...</option>
+                    </select>
+                    <input type="file" class="form-control" id="csvFileInput" accept=".csv">
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-primary text-white">2. フィルター・集計</div>
+                <div class="card-body">
+                    <label class="form-label">対象事業所</label>
+                    <select class="form-select mb-3" id="filterOfficeSelect">
+                        <option value="all">すべての事業所</option>
+                    </select>
+
+                    <label class="form-label">集計単位</label>
+                    <select class="form-select form-select-sm mb-3" id="aggregationUnit">
+                        <option value="day">日ごと</option>
+                        <option value="month" selected>月ごと</option>
+                        <option value="year">年ごと</option>
+                    </select>
+
+                    <label class="form-label">内訳の基準</label>
+                    <select class="form-select form-select-sm mb-3" id="breakdownKey">
+                        <option value="勘定科目名" selected>勘定科目名</option>
+                        <option value="費目名称">費目名称</option>
+                    </select>
+
+                    <label class="form-label">税区分</label>
+                    <select class="form-select form-select-sm mb-3" id="taxMode">
+                        <option value="included" selected>税込み（売上額）</option>
+                        <option value="excluded">税抜き（売上額 - 税額）</option>
+                    </select>
+
+                    <label class="form-label">期間指定</label>
+                    <div class="input-group input-group-sm mb-2">
+                        <span class="input-group-text">FROM</span>
+                        <input type="date" class="form-control" id="dateFrom">
+                    </div>
+                    <div class="input-group input-group-sm mb-3">
+                        <span class="input-group-text">TO</span>
+                        <input type="date" class="form-control" id="dateTo">
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label mb-0">勘定科目</label>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary py-0" onclick="toggleAll('accountCheckboxes', true)">全選択</button>
+                            <button class="btn btn-outline-secondary py-0" onclick="toggleAll('accountCheckboxes', false)">全解除</button>
+                        </div>
+                    </div>
+                    <div id="accountCheckboxes" class="border rounded p-2 mb-3" style="max-height: 100px; overflow-y: auto; font-size: 12px;">
+                        <p class="text-muted small mb-0">データ読込後に表示されます</p>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label mb-0">費目名称</label>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary py-0" onclick="toggleAll('itemCheckboxes', true)">全選択</button>
+                            <button class="btn btn-outline-secondary py-0" onclick="toggleAll('itemCheckboxes', false)">全解除</button>
+                        </div>
+                    </div>
+                    <div id="itemCheckboxes" class="border rounded p-2 mb-3" style="max-height: 100px; overflow-y: auto; font-size: 12px;">
+                        <p class="text-muted small mb-0">データ読込後に表示されます</p>
+                    </div>
+
+                    <button class="btn btn-success w-100" onclick="applyFilter()">集計・表示</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-9">
+            <div class="row mb-3" id="summaryArea">
+                <div class="col-md-4">
+                    <div class="card text-white bg-success shadow-sm">
+                        <div class="card-body">
+                            <h6 class="card-title">合計売上額</h6>
+                            <h4 id="totalSales">¥0</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card text-white bg-info shadow-sm">
+                        <div class="card-body">
+                            <h6 class="card-title">対象データ数</h6>
+                            <h4 id="dataCount">0 件</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>グラフエリア <small class="text-muted">（最大100個）</small></span>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-primary" onclick="addChart('bar')">＋ 棒グラフ</button>
+                        <button class="btn btn-info" onclick="addChart('line')">＋ 折れ線グラフ</button>
+                        <button class="btn btn-secondary" onclick="addChart('pie')">＋ 円グラフ</button>
+                    </div>
+                </div>
+                <div class="card-body" id="chartsContainer" style="display: flex; flex-wrap: wrap; gap: 10px; min-height: 250px;">
+                    <p style="color: #ccc; width: 100%; text-align: center; margin-top: 50px;">右上のボタンからグラフを追加してください</p>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header">売上データ一覧</div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-striped">
+                        <thead id="tableHead"></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- アップロード時の重複確認モーダル -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">データのアップロード方法を選択</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                選択した事業所には既にデータが存在します。<br>
+                どのようにアップロードしますか？
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                <button type="button" class="btn btn-warning" onclick="processUpload('append')">追加（マージ）</button>
+                <button type="button" class="btn btn-danger" onclick="processUpload('overwrite')">上書き（全ファイル置き換え）</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ユーザー管理モーダル -->
+<div class="modal fade" id="userManageModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">ユーザー管理</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6>新規ユーザー追加</h6>
+                <div class="row g-2 mb-4">
+                    <div class="col-md-4"><input type="text" class="form-control" id="newUsername" placeholder="ユーザーID"></div>
+                    <div class="col-md-4"><input type="password" class="form-control" id="newPassword" placeholder="パスワード"></div>
+                    <div class="col-md-3">
+                        <select class="form-select" id="newRole">
+                            <option value="user">使用者</option>
+                            <option value="admin">管理者</option>
+                        </select>
+                    </div>
+                    <div class="col-md-1"><button class="btn btn-primary w-100" onclick="addUser()">＋</button></div>
+                </div>
+                
+                <h6>ユーザー一覧</h6>
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr><th>ユーザーID</th><th>権限</th><th>操作</th></tr>
+                    </thead>
+                    <tbody id="userTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ★追加：アカウント設定モーダル -->
+<div class="modal fade" id="accountModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">⚙️ アカウント設定</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>ログイン中のユーザー：<strong id="currentUsernameDisplay"></strong></p>
+                <div class="mb-3">
+                    <label class="form-label">新しいユーザー名</label>
+                    <input type="text" class="form-control" id="accNewUsername" placeholder="変更する場合のみ入力">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">新しいパスワード</label>
+                    <input type="password" class="form-control" id="accNewPassword" placeholder="変更する場合のみ入力">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                <button type="button" class="btn btn-primary" onclick="updateAccount()">更新</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    const SUPABASE_URL = 'https://hussfbffatqfcguyppfb.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1c3NmYmZmYXRxZmNndXlwcGZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3NTQ2MDIsImV4cCI6MjEwMDMzMDYwMn0.YQRtJ60R5URI9ffKhMmTpshYNQqVlzMI47oxEU3TQgc';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let offices = []; 
+    let officeData = {}; 
+    let pendingUpload = null; 
+    let currentFilteredData = []; 
+    let currentAggregationUnit = 'month'; 
+    let currentBreakdownKey = '勘定科目名'; 
+    let currentTaxMode = 'included'; 
+    
+    let charts = []; 
+    let chartCounter = 0;
+    let currentDashboardId = null; 
+    
+    let currentUser = null;
+
+    window.onload = async function() {
+        const savedUser = sessionStorage.getItem('currentUser');
+        if (savedUser) {
+            currentUser = JSON.parse(savedUser);
+            showMainApp();
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const sharedId = urlParams.get('dashboard');
+            if (sharedId) {
+                currentDashboardId = sharedId;
+            } else {
+                currentDashboardId = localStorage.getItem('currentDashboardId');
+            }
+            if (currentDashboardId) {
+                await loadDashboard();
+            }
+        }
+    };
+
+    // ==========================================
+    // ログイン・ログアウト・権限管理
+    // ==========================================
+
+    async function login() {
+        const username = document.getElementById('loginUsername').value;
+        const password = document.getElementById('loginPassword').value;
+        
+        const { data, error } = await supabaseClient
+            .from('app_users')
+            .select('*')
+            .eq('username', username)
+            .eq('password', password)
+            .single();
+            
+        if (error || !data) {
+            alert('ユーザーIDまたはパスワードが間違っています');
+            return;
+        }
+        
+        currentUser = data;
+        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+        showMainApp();
+    }
+
+    function logout() {
+        currentUser = null;
+        sessionStorage.removeItem('currentUser');
+        document.getElementById('mainApp').style.display = 'none';
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('loginUsername').value = '';
+        document.getElementById('loginPassword').value = '';
+    }
+
+    function showMainApp() {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mainApp').style.display = 'block';
+        updateUIByRole();
+    }
+
+    function updateUIByRole() {
+        const isAdmin = currentUser && currentUser.role === 'admin';
+        document.getElementById('officeManagementCard').style.display = isAdmin ? 'block' : 'none';
+        document.getElementById('uploadCard').style.display = isAdmin ? 'block' : 'none';
+        document.getElementById('userManageBtn').style.display = isAdmin ? 'inline-block' : 'none';
+    }
+
+    // ==========================================
+    // ★追加：アカウント設定機能
+    // ==========================================
+
+    function openAccountModal() {
+        document.getElementById('currentUsernameDisplay').innerText = currentUser.username;
+        document.getElementById('accNewUsername').value = '';
+        document.getElementById('accNewPassword').value = '';
+        const modal = new bootstrap.Modal(document.getElementById('accountModal'));
+        modal.show();
+    }
+
+    async function updateAccount() {
+        const newUsername = document.getElementById('accNewUsername').value;
+        const newPassword = document.getElementById('accNewPassword').value;
+        
+        if (!newUsername && !newPassword) {
+            alert('変更するユーザー名またはパスワードを入力してください');
+            return;
+        }
+        
+        const updateData = {};
+        if (newUsername) updateData.username = newUsername;
+        if (newPassword) updateData.password = newPassword;
+        
+        const { error } = await supabaseClient
+            .from('app_users')
+            .update(updateData)
+            .eq('id', currentUser.id);
+            
+        if (error) {
+            alert('更新に失敗しました: ' + error.message);
+            return;
+        }
+        
+        // ローカルのユーザー情報も更新
+        if (newUsername) currentUser.username = newUsername;
+        if (newPassword) currentUser.password = newPassword;
+        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+        
+        alert('アカウント情報を更新しました');
+        const modal = bootstrap.Modal.getInstance(document.getElementById('accountModal'));
+        modal.hide();
+    }
+
+    // ==========================================
+    // ユーザー管理機能
+    // ==========================================
+
+    async function openUserModal() {
+        const modal = new bootstrap.Modal(document.getElementById('userManageModal'));
+        modal.show();
+        await loadUsers();
+    }
+
+    async function loadUsers() {
+        const { data, error } = await supabaseClient.from('app_users').select('*');
+        if (error) return;
+        
+        const tbody = document.getElementById('userTableBody');
+        tbody.innerHTML = '';
+        data.forEach(u => {
+            // ★変更：管理者ロールの場合は編集・削除不可にする
+            const isAdmin = u.role === 'admin';
+            tbody.innerHTML += `
+                <tr>
+                    <td>${u.username}</td>
+                    <td>
+                        <select class="form-select form-select-sm" onchange="changeRole('${u.id}', this.value)" ${isAdmin ? 'disabled' : ''}>
+                            <option value="user" ${u.role === 'user' ? 'selected' : ''}>使用者</option>
+                            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>管理者</option>
+                        </select>
+                    </td>
+                    <td>${isAdmin ? '-' : `<button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">削除</button>`}</td>
+                </tr>
+            `;
+        });
+    }
+
+    async function addUser() {
+        const username = document.getElementById('newUsername').value;
+        const password = document.getElementById('newPassword').value;
+        const role = document.getElementById('newRole').value;
+        
+        if (!username || !password) {
+            alert('ユーザーIDとパスワードを入力してください');
+            return;
+        }
+        
+        const { error } = await supabaseClient.from('app_users').insert({ username, password, role });
+        if (error) {
+            alert('追加エラー: ' + error.message);
+            return;
+        }
+        document.getElementById('newUsername').value = '';
+        document.getElementById('newPassword').value = '';
+        loadUsers();
+    }
+
+    async function deleteUser(id) {
+        if (!confirm('このユーザーを削除しますか？')) return;
+        await supabaseClient.from('app_users').delete().eq('id', id);
+        loadUsers();
+    }
+
+    async function changeRole(id, role) {
+        await supabaseClient.from('app_users').update({ role }).eq('id', id);
+        loadUsers();
+    }
+
+    // ==========================================
+    // 事業所管理ロジック
+    // ==========================================
+
+    function addOffice() {
+        const id = document.getElementById('newOfficeId').value;
+        const name = document.getElementById('newOfficeName').value;
+        if (!id || !name) { alert('番号と名称を入力してください'); return; }
+        if (offices.some(o => o.id === id)) { alert('その番号は既に存在します'); return; }
+        
+        offices.push({ id: id, name: name });
+        officeData[id] = []; 
+        
+        document.getElementById('newOfficeId').value = '';
+        document.getElementById('newOfficeName').value = '';
+        renderOffices();
+    }
+
+    function editOffice(oldId) {
+        const office = offices.find(o => o.id === oldId);
+        if (!office) return;
+
+        const newId = prompt('新しい番号を入力してください', office.id);
+        if (newId === null) return; 
+        const newName = prompt('新しい名称を入力してください', office.name);
+        if (newName === null) return; 
+
+        if (newId !== oldId && offices.some(o => o.id === newId)) {
+            alert('その番号は既に存在します');
+            return;
+        }
+
+        if (newId !== oldId) {
+            officeData[newId] = officeData[oldId];
+            delete officeData[oldId];
+            officeData[newId].forEach(file => {
+                file.rows.forEach(row => { row['事業所ID'] = newId; });
+            });
+        }
+
+        office.id = newId;
+        office.name = newName;
+        renderOffices();
+        applyFilter();
+        alert('事業所情報を更新しました');
+    }
+
+    function deleteOffice(id) {
+        if (!confirm('この事業所を削除しますか？（アップロード済みのデータも消えます）')) return;
+        offices = offices.filter(o => o.id !== id);
+        delete officeData[id];
+        renderOffices();
+        applyFilter(); 
+    }
+
+    function deleteFile(officeId, fileId) {
+        if (!confirm('このファイルのデータを削除しますか？')) return;
+        officeData[officeId] = officeData[officeId].filter(f => f.fileId !== fileId);
+        renderOffices();
+        initializeFilters();
+        applyFilter();
+    }
+
+    function renderOffices() {
+        const list = document.getElementById('officeList');
+        const uploadSelect = document.getElementById('uploadOfficeSelect');
+        const filterSelect = document.getElementById('filterOfficeSelect');
+        
+        list.innerHTML = '';
+        uploadSelect.innerHTML = '<option value="">アップロード先を選択...</option>';
+        filterSelect.innerHTML = '<option value="all">すべての事業所</option>';
+
+        offices.forEach(o => {
+            list.innerHTML += `
+                <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+                    <strong>${o.id}: ${o.name}</strong>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:10px;" onclick="editOffice('${o.id}')">編集</button>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:10px;" onclick="deleteOffice('${o.id}')">削除</button>
+                    </div>
+                </li>
+            `;
+            if (officeData[o.id] && officeData[o.id].length > 0) {
+                let filesHtml = '<li class="list-group-item py-1 ps-4 bg-light">';
+                officeData[o.id].forEach(file => {
+                    filesHtml += `
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small">📄 ${file.fileName}</span>
+                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:10px;" onclick="deleteFile('${o.id}', '${file.fileId}')">削除</button>
+                        </div>
+                    `;
+                });
+                filesHtml += '</li>';
+                list.innerHTML += filesHtml;
+            }
+            uploadSelect.innerHTML += `<option value="${o.id}">${o.id}: ${o.name}</option>`;
+            filterSelect.innerHTML += `<option value="${o.id}">${o.id}: ${o.name}</option>`;
+        });
+    }
+
+    // ==========================================
+    // CSVアップロードロジック
+    // ==========================================
+
+    function normalizeDate(dateStr) {
+        if (!dateStr) return '';
+        let d = dateStr.replace(/\//g, '-').split(' ')[0];
+        let parts = d.split('-');
+        if (parts.length === 3) {
+            let year = parts[0];
+            let month = parts[1].padStart(2, '0');
+            let day = parts[2].padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+        return d; 
+    }
+
+    document.getElementById('csvFileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        const officeId = document.getElementById('uploadOfficeSelect').value;
+        
+        if (!officeId) {
+            alert('アップロード先の事業所を選択してください');
+            e.target.value = ''; 
+            return;
+        }
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.readAsText(file, 'Shift-JIS');
+        
+        reader.onload = function(event) {
+            const csvData = event.target.result;
+            Papa.parse(csvData, {
+                header: true,
+                skipEmptyLines: true,
+                transformHeader: function(h) { return h.trim(); },
+                complete: function(results) {
+                    const cleanedData = results.data.map(row => {
+                        if (row['売上日']) {
+                            row['売上日'] = normalizeDate(row['売上日']);
+                        }
+                        row['事業所ID'] = officeId; 
+                        return row;
+                    });
+                    
+                    pendingUpload = { 
+                        officeId: officeId, 
+                        fileName: file.name, 
+                        data: cleanedData 
+                    };
+
+                    if (officeData[officeId] && officeData[officeId].length > 0) {
+                        const modal = new bootstrap.Modal(document.getElementById('uploadModal'));
+                        modal.show();
+                    } else {
+                        processUpload('append'); 
+                    }
+                }
+            });
+        };
+    });
+
+    function processUpload(mode) {
+        if (!pendingUpload) return;
+        const { officeId, fileName, data } = pendingUpload;
+
+        if (mode === 'overwrite') {
+            officeData[officeId] = [];
+        } 
+        
+        const fileId = 'file_' + Date.now();
+        officeData[officeId].push({
+            fileId: fileId,
+            fileName: fileName,
+            rows: data
+        });
+
+        const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
+        if (modal) modal.hide();
+        
+        pendingUpload = null;
+        document.getElementById('csvFileInput').value = ''; 
+        renderOffices();
+        initializeFilters();
+        applyFilter();
+        alert('データのアップロードが完了しました');
+    }
+
+    // ==========================================
+    // フィルタリング・集計ロジック
+    // ==========================================
+
+    function toggleAll(containerId, isChecked) {
+        const checkboxes = document.querySelectorAll(`#${containerId} input[type="checkbox"]`);
+        checkboxes.forEach(cb => { cb.checked = isChecked; });
+    }
+
+    function initializeFilters() {
+        const accounts = new Set();
+        const items = new Set();
+
+        Object.values(officeData).forEach(filesArray => {
+            filesArray.forEach(file => {
+                file.rows.forEach(row => {
+                    if (row['勘定科目名']) accounts.add(row['勘定科目名']);
+                    if (row['費目名称']) items.add(row['費目名称']);
+                });
+            });
+        });
+
+        const accountContainer = document.getElementById('accountCheckboxes');
+        const itemContainer = document.getElementById('itemCheckboxes');
+
+        accountContainer.innerHTML = '';
+        itemContainer.innerHTML = '';
+
+        let accIndex = 0;
+        accounts.forEach(acc => {
+            accountContainer.innerHTML += `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="${acc}" id="acc_${accIndex}" checked>
+                    <label class="form-check-label" for="acc_${accIndex}">${acc}</label>
+                </div>
+            `;
+            accIndex++;
+        });
+
+        let itmIndex = 0;
+        items.forEach(itm => {
+            itemContainer.innerHTML += `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="${itm}" id="itm_${itmIndex}" checked>
+                    <label class="form-check-label" for="itm_${itmIndex}">${itm}</label>
+                </div>
+            `;
+            itmIndex++;
+        });
+    }
+
+    function applyFilter() {
+        const targetOffice = document.getElementById('filterOfficeSelect').value;
+        const dateFrom = document.getElementById('dateFrom').value;
+        const dateTo = document.getElementById('dateTo').value;
+        
+        currentAggregationUnit = document.getElementById('aggregationUnit').value;
+        currentBreakdownKey = document.getElementById('breakdownKey').value;
+        currentTaxMode = document.getElementById('taxMode').value;
+
+        const accountCheckboxes = document.querySelectorAll('#accountCheckboxes input[type="checkbox"]:checked');
+        const selectedAccounts = Array.from(accountCheckboxes).map(cb => cb.value);
+
+        const itemCheckboxes = document.querySelectorAll('#itemCheckboxes input[type="checkbox"]:checked');
+        const selectedItems = Array.from(itemCheckboxes).map(cb => cb.value);
+
+        let combinedData = [];
+        
+        if (targetOffice === 'all') {
+            Object.keys(officeData).forEach(id => {
+                officeData[id].forEach(file => {
+                    combinedData = combinedData.concat(file.rows);
+                });
+            });
+        } else {
+            if (officeData[targetOffice]) {
+                officeData[targetOffice].forEach(file => {
+                    combinedData = combinedData.concat(file.rows);
+                });
+            }
+        }
+
+        const filteredData = combinedData.filter(row => {
+            const salesDate = row['売上日'] || '';
+            if (dateFrom && salesDate < dateFrom) return false;
+            if (dateTo && salesDate > dateTo) return false;
+            if (selectedAccounts.length > 0 && !selectedAccounts.includes(row['勘定科目名'])) return false;
+            if (selectedItems.length > 0 && !selectedItems.includes(row['費目名称'])) return false;
+            return true;
+        });
+
+        currentFilteredData = filteredData; 
+        displayData(filteredData);
+        updateAllCharts(); 
+    }
+
+    function parseNumber(str) {
+        if (!str) return 0;
+        let normalized = str.toString().replace(/[０-９]/g, function(s) { return String.fromCharCode(s.charCodeAt(0) - 0xFEE0); });
+        normalized = normalized.replace(/[,\s¥]/g, '');
+        return parseFloat(normalized) || 0;
+    }
+
+    function getSalesAmount(row) {
+        const total = parseNumber(row['売上額']);
+        if (currentTaxMode === 'excluded') {
+            const tax = parseNumber(row['売上額（税）']);
+            return total - tax;
+        }
+        return total;
+    }
+
+    function displayData(data) {
+        const tableHead = document.getElementById('tableHead');
+        const tableBody = document.getElementById('tableBody');
+        const summaryArea = document.getElementById('summaryArea');
+        
+        tableHead.innerHTML = '';
+        tableBody.innerHTML = '';
+
+        if (data.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="22" class="text-center">該当するデータがありません</td></tr>';
+            summaryArea.innerHTML = `
+                <div class="col-md-4"><div class="card text-white bg-success shadow-sm"><div class="card-body"><h6 class="card-title">合計売上額</h6><h4>¥0</h4></div></div></div>
+                <div class="col-md-4"><div class="card text-white bg-info shadow-sm"><div class="card-body"><h6 class="card-title">対象データ数</h6><h4>0 件</h4></div></div></div>
+            `;
+            return;
+        }
+
+        const headers = Object.keys(data[0]);
+        headers.forEach(h => { tableHead.innerHTML += `<th>${h}</th>`; });
+
+        const displayLimit = 100;
+        data.slice(0, displayLimit).forEach(row => {
+            let rowHtml = '<tr>';
+            headers.forEach(h => { rowHtml += `<td>${row[h]}</td>`; });
+            rowHtml += '</tr>';
+            tableBody.innerHTML += rowHtml;
+        });
+
+        let total = 0;
+        data.forEach(row => { total += getSalesAmount(row); });
+
+        let officeTotals = {};
+        data.forEach(row => {
+            const oId = row['事業所ID'];
+            if (!officeTotals[oId]) officeTotals[oId] = 0;
+            officeTotals[oId] += getSalesAmount(row);
+        });
+
+        let summaryHtml = `
+            <div class="col-md-4">
+                <div class="card text-white bg-success shadow-sm">
+                    <div class="card-body">
+                        <h6 class="card-title">合計売上額 (${currentTaxMode === 'included' ? '税込み' : '税抜き'})</h6>
+                        <h4>¥${total.toLocaleString()}</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-info shadow-sm">
+                    <div class="card-body">
+                        <h6 class="card-title">対象データ数</h6>
+                        <h4>${data.length} 件</h4>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        offices.forEach(o => {
+            if (officeTotals[o.id] !== undefined) {
+                summaryHtml += `
+                    <div class="col-md-4 mt-2">
+                        <div class="card text-white bg-secondary shadow-sm">
+                            <div class="card-body">
+                                <h6 class="card-title">${o.name} の売上</h6>
+                                <h4>¥${officeTotals[o.id].toLocaleString()}</h4>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+
+        summaryArea.innerHTML = summaryHtml;
+    }
+
+    // ==========================================
+    // グラフ管理ロジック
+    // ==========================================
+
+    function addChart(type) {
+        if (charts.length >= 100) {
+            alert('グラフは最大100個までしか追加できません。');
+            return;
+        }
+
+        chartCounter++;
+        const chartId = 'chartCanvas_' + chartCounter;
+        const container = document.getElementById('chartsContainer');
+        
+        if (container.querySelector('p')) {
+            container.innerHTML = '';
+        }
+
+        const chartBox = document.createElement('div');
+        chartBox.className = 'card shadow-sm';
+        chartBox.style.width = '48%';
+        chartBox.style.height = '320px';
+        chartBox.innerHTML = `
+            <div class="card-header d-flex justify-content-between align-items-center py-1">
+                <small class="fw-bold">${getChartTitle(type)}</small>
+                <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeChart('${chartId}', this)">×</button>
+            </div>
+            <div class="card-body p-2" style="height: calc(100% - 35px);">
+                <canvas id="${chartId}"></canvas>
+            </div>
+        `;
+        container.appendChild(chartBox);
+
+        const ctx = document.getElementById(chartId).getContext('2d');
+        const chartData = getChartData(type, currentFilteredData);
+        
+        const tooltipConfig = {
+            responsive: true, 
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: type === 'pie' },
+                tooltip: {
+                    callbacks: {
+                        afterBody: function(context) {
+                            const label = context[0].label;
+                            const breakdown = context[0].chart.data.breakdownData[label];
+                            if (!breakdown) return '';
+                            
+                            let lines = ['----- 内訳 -----'];
+                            for (const key in breakdown) {
+                                lines.push(`${key}: ¥${breakdown[key].toLocaleString()}`);
+                            }
+                            return lines;
+                        }
+                    }
+                }
+            }
+        };
+
+        const newChart = new Chart(ctx, {
+            type: type,
+            data: chartData,
+            options: tooltipConfig
+        });
+
+        charts.push({ id: chartId, chartObj: newChart, type: type });
+    }
+
+    function removeChart(id, btn) {
+        charts = charts.filter(c => c.id !== id);
+        const chartBox = btn.closest('.card');
+        chartBox.remove();
+
+        const container = document.getElementById('chartsContainer');
+        if (charts.length === 0) {
+            container.innerHTML = '<p style="color: #ccc; width: 100%; text-align: center; margin-top: 50px;">右上のボタンからグラフを追加してください</p>';
+        }
+    }
+
+    function getChartTitle(type) {
+        let unitText = '';
+        if (currentAggregationUnit === 'day') unitText = '日ごと';
+        if (currentAggregationUnit === 'month') unitText = '月ごと';
+        if (currentAggregationUnit === 'year') unitText = '年ごと';
+
+        if (type === 'bar') return `📊 ${unitText}の売上`;
+        if (type === 'line') return `📈 ${unitText}の売上`;
+        if (type === 'pie') return '🥧 費目名称ごとの売上';
+        return 'グラフ';
+    }
+
+    function getChartData(type, data) {
+        const totals = {};
+        const breakdowns = {}; 
+        
+        let keyName = '';
+        let breakdownKeyName = currentBreakdownKey; 
+        
+        if (type === 'bar' || type === 'line') {
+            keyName = '売上日';
+        } else if (type === 'pie') {
+            keyName = '費目名称';
+        }
+
+        data.forEach(row => {
+            let key = row[keyName] || '不明';
+            
+            if (keyName === '売上日' && key !== '不明') {
+                if (currentAggregationUnit === 'month') {
+                    key = key.substring(0, 7); 
+                } else if (currentAggregationUnit === 'year') {
+                    key = key.substring(0, 4); 
+                }
+            }
+
+            const bKey = row[breakdownKeyName] || '不明';
+            const val = getSalesAmount(row);
+            
+            totals[key] = (totals[key] || 0) + val;
+            
+            if (!breakdowns[key]) breakdowns[key] = {};
+            breakdowns[key][bKey] = (breakdowns[key][bKey] || 0) + val;
+        });
+
+        let labels = Object.keys(totals);
+        if (type === 'bar' || type === 'line') {
+            labels.sort(); 
+        }
+
+        const values = labels.map(l => totals[l]);
+
+        const colors = [
+            'rgba(255, 99, 132, 0.6)',
+            'rgba(54, 162, 235, 0.6)',
+            'rgba(255, 206, 86, 0.6)',
+            'rgba(75, 192, 192, 0.6)',
+            'rgba(153, 102, 255, 0.6)',
+            'rgba(255, 159, 64, 0.6)'
+        ];
+
+        return {
+            labels: labels,
+            datasets: [{
+                label: '売上額',
+                data: values,
+                backgroundColor: type === 'line' ? 'rgba(54, 162, 235, 0.2)' : colors.slice(0, labels.length),
+                borderColor: type === 'line' ? 'rgba(54, 162, 235, 1)' : 'rgba(255, 255, 255, 1)',
+                borderWidth: 1
+            }],
+            breakdownData: breakdowns 
+        };
+    }
+
+    function updateAllCharts() {
+        charts.forEach(c => {
+            const newData = getChartData(c.type, currentFilteredData);
+            c.chartObj.data = newData;
+            c.chartObj.update();
+        });
+    }
+
+    // ==========================================
+    // Supabase連携の保存・読み込みロジック
+    // ==========================================
+
+    async function saveDashboard() {
+        const title = document.getElementById('dashboardTitle').value || '無題のダッシュボード';
+        const shareMode = document.getElementById('shareMode').value;
+        const chartTypes = charts.map(c => c.type);
+
+        const dashboardData = {
+            title: title,
+            share_mode: shareMode,
+            charts: chartTypes
+        };
+
+        try {
+            let data, error;
+            
+            if (currentDashboardId) {
+                ({ data, error } = await supabaseClient
+                    .from('sales_dashboards')
+                    .update(dashboardData)
+                    .eq('id', currentDashboardId)
+                    .select());
+            } else {
+                ({ data, error } = await supabaseClient
+                    .from('sales_dashboards')
+                    .insert(dashboardData)
+                    .select());
+            }
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                currentDashboardId = data[0].id;
+                localStorage.setItem('currentDashboardId', currentDashboardId);
+            }
+
+            alert('ダッシュボードをSupabaseに保存しました！\n（タイトル: ' + title + '）\n\n共有用URL:\n' + window.location.origin + window.location.pathname + '?dashboard=' + currentDashboardId);
+            
+        } catch (error) {
+            console.error('保存エラー:', error);
+            alert('保存に失敗しました: ' + error.message);
+        }
+    }
+
+    async function loadDashboard() {
+        if (!currentDashboardId) return;
+
+        try {
+            const { data, error } = await supabaseClient
+                .from('sales_dashboards')
+                .select('*')
+                .eq('id', currentDashboardId)
+                .single();
+
+            if (error) throw error;
+
+            if (data) {
+                document.getElementById('dashboardTitle').value = data.title || '';
+                document.getElementById('shareMode').value = data.share_mode || 'private';
+
+                if (data.charts && data.charts.length > 0) {
+                    data.charts.forEach(type => {
+                        addChart(type);
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('読み込みエラー:', error);
+        }
+    }
+
+    function newDashboard() {
+        if (!confirm('現在のダッシュボードをクリアして新規作成しますか？')) return;
+        
+        const container = document.getElementById('chartsContainer');
+        container.innerHTML = '<p style="color: #ccc; width: 100%; text-align: center; margin-top: 50px;">右上のボタンからグラフを追加してください</p>';
+        charts = [];
+        
+        document.getElementById('dashboardTitle').value = '';
+        document.getElementById('shareMode').value = 'private';
+        
+        currentDashboardId = null;
+        localStorage.removeItem('currentDashboardId');
+    }
+</script>
+</body>
+</html>
+
+
