@@ -254,6 +254,9 @@
             if (sharedId) currentDashboardId = sharedId;
             else currentDashboardId = localStorage.getItem('currentDashboardId');
             if (currentDashboardId) await loadDashboard();
+            
+            // ★追加：起動時に自動的にデータを取得・表示する
+            await applyFilter();
         }
     };
 
@@ -267,6 +270,9 @@
         showMainApp();
         await loadOffices();
         await initializeFilters();
+        
+        // ★追加：ログイン直後にデータを取得・表示する
+        await applyFilter();
     }
 
     function logout() {
@@ -477,7 +483,6 @@
     }
 
     async function initializeFilters() {
-        // ★修正：シンプルなselectに戻す
         const { data, error } = await supabaseClient.from('sales_data').select('account_name, item_name');
         if (error) {
             alert('科目取得エラー:\n' + JSON.stringify(error, null, 2));
@@ -539,7 +544,6 @@
             query = query.in('item_name', selectedItems);
         }
 
-        // ★修正：シンプルなselectに戻す
         const { data, error } = await query;
         if (error) {
             alert('データ取得エラー:\n' + JSON.stringify(error, null, 2));
