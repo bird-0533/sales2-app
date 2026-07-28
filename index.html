@@ -241,13 +241,36 @@
     let currentDashboardId = null; 
     let currentUser = null;
 
+    // ★修正：順序をid順にして全件取得する安全なページネーション
+    async function fetchAllData(query) {
+        let allData = [];
+        let from = 0;
+        const limit = 1000; 
+        while (true) {
+            const { data, error } = await query.order('id', { ascending: true }).range(from, from + limit - 1);
+            if (error) {
+                console.error('Supabase Error:', error);
+                throw error;
+            }
+            if (data.length === 0) break;
+            allData = allData.concat(data);
+            if (data.length < limit) break;
+            from += limit;
+        }
+        return allData;
+    }
+
     window.onload = async function() {
         const savedUser = sessionStorage.getItem('currentUser');
         if (savedUser) {
             currentUser = JSON.parse(savedUser);
             showMainApp();
-            await loadOffices();
-            await initializeFilters();
+            try {
+                await loadOffices();
+                await initializeFilters();
+            } catch (e) {
+                console.error("初期化エラー", e);
+            }
             
             const urlParams = new URLSearchParams(window.location.search);
             const sharedId = urlParams.get('dashboard');
@@ -255,7 +278,6 @@
             else currentDashboardId = localStorage.getItem('currentDashboardId');
             if (currentDashboardId) await loadDashboard();
             
-            // ★追加：起動時に自動的にデータを取得・表示する
             await applyFilter();
         }
     };
@@ -270,8 +292,6 @@
         showMainApp();
         await loadOffices();
         await initializeFilters();
-        
-        // ★追加：ログイン直後にデータを取得・表示する
         await applyFilter();
     }
 
@@ -483,11 +503,11 @@
     }
 
     async function initializeFilters() {
-        const { data, error } = await supabaseClient.from('sales_data').select('account_name, item_name');
-        if (error) {
-            alert('科目取得エラー:\n' + JSON.stringify(error, null, 2));
-            return;
-        }
+        const query = supabaseClient.from('sales_data').select('account_name, item_name');
+        let data = [];
+        try {
+            data = await fetchAllData(query);
+        } catch (error) { return; }
 
         const accounts = new Set();
         const items = new Set();
@@ -544,11 +564,10 @@
             query = query.in('item_name', selectedItems);
         }
 
-        const { data, error } = await query;
-        if (error) {
-            alert('データ取得エラー:\n' + JSON.stringify(error, null, 2));
-            return;
-        }
+        let data = [];
+        try {
+            data = await fetchAllData(query);
+        } catch (error) { return; }
 
         currentFilteredData = data;
         displayData(currentFilteredData);
