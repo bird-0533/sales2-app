@@ -241,11 +241,40 @@
     let currentDashboardId = null; 
     let currentUser = null;
 
+    // デフォルトの期間（今年の1月1日〜今日）を設定
+    function setDefaultDateRange() {
+        const today = new Date();
+        const year = today.getFullYear();
+        document.getElementById('dateFrom').value = `${year}-01-01`;
+        document.getElementById('dateTo').value = today.toISOString().split('T')[0];
+    }
+
+    // ★修正：全件取得する安全なページネーション（順序を指定し、少し待機を入れる）
+    async function fetchAllData(query) {
+        let allData = [];
+        let from = 0;
+        const limit = 1000; 
+        while (true) {
+            const { data, error } = await query.order('id', { ascending: true }).range(from, from + limit - 1);
+            if (error) {
+                console.error('Supabase Error:', error);
+                throw error;
+            }
+            if (data.length === 0) break;
+            allData = allData.concat(data);
+            if (data.length < limit) break;
+            from += limit;
+            await new Promise(resolve => setTimeout(resolve, 100)); // レートリミット対策で100ms待機
+        }
+        return allData;
+    }
+
     window.onload = async function() {
         const savedUser = sessionStorage.getItem('currentUser');
         if (savedUser) {
             currentUser = JSON.parse(savedUser);
             showMainApp();
+            setDefaultDateRange();
             try {
                 await loadOffices();
                 await initializeFilters();
@@ -271,6 +300,7 @@
         currentUser = data;
         sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
         showMainApp();
+        setDefaultDateRange();
         await loadOffices();
         await initializeFilters();
         await applyFilter();
@@ -465,6 +495,7 @@
             const chunk = insertData.slice(i, i + chunkSize);
             const { error } = await supabaseClient.from('sales_data').insert(chunk);
             if (error) console.error('Insert error', error);
+            await new Promise(resolve => setTimeout(resolve, 100));
         }
 
         bootstrap.Modal.getInstance(document.getElementById('uploadModal'))?.hide();
@@ -483,35 +514,29 @@
         document.querySelectorAll(`#${containerId} input[type="checkbox"]`).forEach(cb => cb.checked = isChecked);
     }
 
+    // ★修正：科目・費目リストの取得はRPC関数（get_filter_options）を使い続ける
     async function initializeFilters() {
-        const { data, error } = await supabaseClient.from('sales_data').select('account_name, item_name');
+        const { data, error } = await supabaseClient.rpc('get_filter_options');
         if (error) return;
 
-        const accounts = new Set();
-        const items = new Set();
-        data.forEach(row => {
-            if (row.account_name) accounts.add(row.account_name);
-            if (row.item_name) items.add(row.item_name);
-        });
+        const accounts = data.accounts || [];
+        const items = data.items || [];
 
         const accountContainer = document.getElementById('accountCheckboxes');
         const itemContainer = document.getElementById('itemCheckboxes');
         accountContainer.innerHTML = '';
         itemContainer.innerHTML = '';
 
-        let accIndex = 0;
-        accounts.forEach(acc => {
-            accountContainer.innerHTML += `<div class="form-check"><input class="form-check-input" type="checkbox" value="${acc}" id="acc_${accIndex}" checked><label class="form-check-label" for="acc_${accIndex}">${acc}</label></div>`;
-            accIndex++;
+        accounts.forEach((acc, index) => {
+            accountContainer.innerHTML += `<div class="form-check"><input class="form-check-input" type="checkbox" value="${acc}" id="acc_${index}" checked><label class="form-check-label" for="acc_${index}">${acc}</label></div>`;
         });
 
-        let itmIndex = 0;
-        items.forEach(itm => {
-            itemContainer.innerHTML += `<div class="form-check"><input class="form-check-input" type="checkbox" value="${itm}" id="itm_${itmIndex}" checked><label class="form-check-label" for="itm_${itmIndex}">${itm}</label></div>`;
-            itmIndex++;
+        items.forEach((itm, index) => {
+            itemContainer.innerHTML += `<div class="form-check"><input class="form-check-input" type="checkbox" value="${itm}" id="itm_${index}" checked><label class="form-check-label" for="itm_${index}">${itm}</label></div>`;
         });
     }
 
+    // ★修正：売上データの取得と集計はJavaScriptに戻す（全件取得）
     async function applyFilter() {
         const targetOffice = document.getElementById('filterOfficeSelect').value;
         const dateFrom = document.getElementById('dateFrom').value || null;
@@ -530,18 +555,23 @@
         const isAllItemsSelected = allItemCheckboxes.length > 0 && allItemCheckboxes.length === selectedItemCheckboxes.length;
         const selectedItems = Array.from(selectedItemCheckboxes).map(cb => cb.value);
 
-        const params = {
-            p_office_id: targetOffice === 'all' ? null : targetOffice,
-            p_date_from: dateFrom,
-            p_date_to: dateTo
-        };
+        // Supabaseから全件取得するクエリを作成
+        let query = supabaseClient.from('sales_data').select('office_id, sales_date, account_name, item_name, sales_amount, tax_amount');
+        if (targetOffice !== 'all') query = query.eq('office_id', targetOffice);
+        if (dateFrom) query = query.gte('sales_date', dateFrom);
+        if (dateTo) query = query.lte('sales_date', dateTo);
+        
+        // 科目・費目はJS側でフィルタするため、Supabaseクエリには入れない
 
-        const { data, error } = await supabaseClient.rpc('get_sales_summary', params);
-        if (error) {
+        let data = [];
+        try {
+            data = await fetchAllData(query);
+        } catch (error) { 
             alert('データ取得エラー:\n' + JSON.stringify(error, null, 2));
-            return;
+            return; 
         }
 
+        // JavaScript側で科目・費目のチェックボックスによるフィルタリング
         let filteredData = data;
         if (!isAllAccountsSelected && selectedAccounts.length > 0) {
             filteredData = filteredData.filter(row => selectedAccounts.includes(row.account_name));
@@ -563,7 +593,7 @@
     }
 
     function getSalesAmount(row) {
-        const total = row.total_amount || 0;
+        const total = row.sales_amount || 0;
         if (currentTaxMode === 'excluded') {
             const tax = row.tax_amount || 0;
             return total - tax;
@@ -590,7 +620,7 @@
             '売上日': 'sales_date',
             '勘定科目名': 'account_name',
             '費目名称': 'item_name',
-            '売上額': 'total_amount',
+            '売上額': 'sales_amount',
             '売上額（税）': 'tax_amount'
         };
         
@@ -638,12 +668,11 @@
         const ctx = document.getElementById(chartId).getContext('2d');
         const chartData = getChartData(type, currentFilteredData);
         
-        // ★修正：内訳表示を事業所ごとに対応させる
         const tooltipConfig = {
             responsive: true, 
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: type === 'pie' ? true : true }, // 比較グラフの凡例を表示
+                legend: { display: true }, 
                 tooltip: {
                     callbacks: {
                         afterBody: function(context) {
@@ -696,12 +725,11 @@
 
     function getChartData(type, data) {
         const colors = ['rgba(255, 99, 132, 0.6)', 'rgba(54, 162, 235, 0.6)', 'rgba(255, 206, 86, 0.6)', 'rgba(75, 192, 192, 0.6)', 'rgba(153, 102, 255, 0.6)', 'rgba(255, 159, 64, 0.6)'];
-        const breakdowns = {}; // ツールチップ用の内訳データ格納庫
+        const breakdowns = {}; 
 
-        // 円グラフの場合（費目名称ごと、全事業所合計）
         if (type === 'pie') {
             const totals = {};
-            breakdowns.all = {}; // 円グラフ用のキー
+            breakdowns.all = {}; 
             
             data.forEach(row => {
                 let key = row.item_name || '不明';
@@ -723,7 +751,6 @@
             };
         }
 
-        // 棒グラフ・折れ線グラフの場合（事業所ごとに比較）
         const officeIds = [...new Set(data.map(row => row.office_id))];
         let allDates = new Set();
         
@@ -737,13 +764,13 @@
         });
         
         let labels = Array.from(allDates);
-        labels.sort(); // 日付順にソート
+        labels.sort(); 
         
         const datasets = [];
         
         officeIds.forEach((officeId, index) => {
             const officeData = {};
-            breakdowns[index] = {}; // 事業所（datasetIndex）ごとの内訳
+            breakdowns[index] = {}; 
             
             data.filter(row => row.office_id === officeId).forEach(row => {
                 let key = row.sales_date || '不明';
