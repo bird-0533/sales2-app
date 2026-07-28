@@ -241,25 +241,6 @@
     let currentDashboardId = null; 
     let currentUser = null;
 
-    // ★修正：順序をid順にして全件取得する安全なページネーション
-    async function fetchAllData(query) {
-        let allData = [];
-        let from = 0;
-        const limit = 1000; 
-        while (true) {
-            const { data, error } = await query.order('id', { ascending: true }).range(from, from + limit - 1);
-            if (error) {
-                console.error('Supabase Error:', error);
-                throw error;
-            }
-            if (data.length === 0) break;
-            allData = allData.concat(data);
-            if (data.length < limit) break;
-            from += limit;
-        }
-        return allData;
-    }
-
     window.onload = async function() {
         const savedUser = sessionStorage.getItem('currentUser');
         if (savedUser) {
@@ -503,11 +484,8 @@
     }
 
     async function initializeFilters() {
-        const query = supabaseClient.from('sales_data').select('account_name, item_name');
-        let data = [];
-        try {
-            data = await fetchAllData(query);
-        } catch (error) { return; }
+        const { data, error } = await supabaseClient.from('sales_data').select('account_name, item_name');
+        if (error) return;
 
         const accounts = new Set();
         const items = new Set();
@@ -536,8 +514,8 @@
 
     async function applyFilter() {
         const targetOffice = document.getElementById('filterOfficeSelect').value;
-        const dateFrom = document.getElementById('dateFrom').value;
-        const dateTo = document.getElementById('dateTo').value;
+        const dateFrom = document.getElementById('dateFrom').value || null;
+        const dateTo = document.getElementById('dateTo').value || null;
         currentAggregationUnit = document.getElementById('aggregationUnit').value;
         currentBreakdownKey = document.getElementById('breakdownKey').value;
         currentTaxMode = document.getElementById('taxMode').value;
@@ -552,24 +530,29 @@
         const isAllItemsSelected = allItemCheckboxes.length > 0 && allItemCheckboxes.length === selectedItemCheckboxes.length;
         const selectedItems = Array.from(selectedItemCheckboxes).map(cb => cb.value);
 
-        let query = supabaseClient.from('sales_data').select('office_id, sales_date, account_name, item_name, sales_amount, tax_amount');
-        if (targetOffice !== 'all') query = query.eq('office_id', targetOffice);
-        if (dateFrom) query = query.gte('sales_date', dateFrom);
-        if (dateTo) query = query.lte('sales_date', dateTo);
-        
+        // ★修正：SupabaseのRPC関数を呼び出して集計済みデータを取得
+        const params = {
+            p_office_id: targetOffice === 'all' ? null : targetOffice,
+            p_date_from: dateFrom,
+            p_date_to: dateTo
+        };
+
+        const { data, error } = await supabaseClient.rpc('get_sales_summary', params);
+        if (error) {
+            alert('データ取得エラー:\n' + JSON.stringify(error, null, 2));
+            return;
+        }
+
+        // JavaScript側で科目・費目のチェックボックスによるフィルタリング
+        let filteredData = data;
         if (!isAllAccountsSelected && selectedAccounts.length > 0) {
-            query = query.in('account_name', selectedAccounts);
+            filteredData = filteredData.filter(row => selectedAccounts.includes(row.account_name));
         }
         if (!isAllItemsSelected && selectedItems.length > 0) {
-            query = query.in('item_name', selectedItems);
+            filteredData = filteredData.filter(row => selectedItems.includes(row.item_name));
         }
 
-        let data = [];
-        try {
-            data = await fetchAllData(query);
-        } catch (error) { return; }
-
-        currentFilteredData = data;
+        currentFilteredData = filteredData;
         displayData(currentFilteredData);
         updateAllCharts();
     }
@@ -582,7 +565,7 @@
     }
 
     function getSalesAmount(row) {
-        const total = row.sales_amount || 0;
+        const total = row.total_amount || 0; // ★修正：total_amountを使用
         if (currentTaxMode === 'excluded') {
             const tax = row.tax_amount || 0;
             return total - tax;
@@ -609,7 +592,7 @@
             '売上日': 'sales_date',
             '勘定科目名': 'account_name',
             '費目名称': 'item_name',
-            '売上額': 'sales_amount',
+            '売上額': 'total_amount', // ★修正
             '売上額（税）': 'tax_amount'
         };
         
