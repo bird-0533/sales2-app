@@ -293,7 +293,6 @@
     }
 
     window.onload = async function() {
-        // ★修正：Supabase Authのセッションを確認してログイン状態を復元
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (session) {
             const email = session.user.email;
@@ -302,7 +301,6 @@
             if (userData) {
                 currentUser = { id: session.user.id, username: email, role: userData.role };
             } else {
-                // app_usersになければデフォルトのuser権限で作成
                 await supabaseClient.from('app_users').insert({ username: email, role: 'user', password: 'managed_by_auth' });
                 currentUser = { id: session.user.id, username: email, role: 'user' };
             }
@@ -326,7 +324,6 @@
         }
     };
 
-    // ★修正：Supabase Authでログイン
     async function login() {
         const email = document.getElementById('loginUsername').value;
         const password = document.getElementById('loginPassword').value;
@@ -339,10 +336,8 @@
             return;
         }
         
-        // app_usersテーブルから権限を取得
         const { data: userData, error: userError } = await supabaseClient.from('app_users').select('*').eq('username', email).single();
         if (userError || !userData) {
-            // app_usersにレコードがない場合はデフォルトのuser権限とする
             currentUser = { id: data.user.id, username: email, role: 'user' };
             await supabaseClient.from('app_users').insert({ username: email, role: 'user', password: 'managed_by_auth' });
         } else {
@@ -364,7 +359,6 @@
         hideLoading();
     }
 
-    // ★修正：Supabase Authでログアウト
     async function logout() {
         await supabaseClient.auth.signOut();
         currentUser = null;
@@ -393,7 +387,6 @@
         new bootstrap.Modal(document.getElementById('accountModal')).show();
     }
 
-    // ★修正：Supabase Authでパスワード・Email更新
     async function updateAccount() {
         const newEmail = document.getElementById('accNewUsername').value;
         const newPassword = document.getElementById('accNewPassword').value;
@@ -408,7 +401,6 @@
         
         if (newEmail) {
             currentUser.username = newEmail;
-            // app_usersテーブルのusernameも更新
             await supabaseClient.from('app_users').update({ username: newEmail }).eq('username', currentUser.username);
         }
         sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
@@ -428,18 +420,15 @@
         });
     }
     
-    // ★修正：Supabase Authにユーザー作成し、app_usersに権限保存
     async function addUser() {
         const email = document.getElementById('newUsername').value;
         const password = document.getElementById('newPassword').value;
         const role = document.getElementById('newRole').value;
         if (!email || !password) { alert('Emailとパスワードを入力してください'); return; }
         
-        // Supabase Authにユーザー作成
         const { data, error } = await supabaseClient.auth.signUp({ email: email, password: password });
         if (error) { alert('追加エラー: ' + error.message); return; }
         
-        // app_usersテーブルに権限を保存
         const { error: dbError } = await supabaseClient.from('app_users').insert({ username: email, role: role, password: 'managed_by_auth' });
         if (dbError) { alert('権限保存エラー: ' + dbError.message); return; }
         
@@ -448,11 +437,7 @@
     
     async function deleteUser(id) { 
         if (!confirm('削除しますか？')) return; 
-        // app_usersから削除（Authからの削除は管理画面で行う必要があります）
-        const { data: userData } = await supabaseClient.from('app_users').select('username').eq('id', id).single();
-        if (userData) {
-            await supabaseClient.from('app_users').delete().eq('id', id);
-        }
+        await supabaseClient.from('app_users').delete().eq('id', id);
         loadUsers(); 
     }
     async function changeRole(id, role) { await supabaseClient.from('app_users').update({ role }).eq('id', id); loadUsers(); }
@@ -547,7 +532,8 @@
                         return row;
                     });
                     const { count } = await supabaseClient.from('sales_summary').select('*', { count: 'exact', head: true }).eq('office_id', officeId);
-                    pendingUpload = { officeId, data: cleanedData };
+                    // ★修正：pendingUploadにfileNameを保存
+                    pendingUpload = { officeId, data: cleanedData, fileName: file.name };
                     if (count > 0) new bootstrap.Modal(document.getElementById('uploadModal')).show();
                     else processUpload('append'); 
                 }
@@ -557,7 +543,7 @@
 
     async function processUpload(mode) {
         if (!pendingUpload) return;
-        const { officeId, data } = pendingUpload;
+        const { officeId, data, fileName } = pendingUpload;
         showLoading();
         alert('アップロード中です。完了まで画面を閉じないでください。');
 
@@ -566,13 +552,15 @@
             await supabaseClient.from('sales_summary').delete().eq('office_id', officeId);
         }
 
+        // ★修正：insertDataにuploaded_fileを追加
         const insertData = data.map(row => ({
             office_id: officeId,
             sales_date: row['売上日'],
             account_name: row['勘定科目名'],
             item_name: row['費目名称'],
             sales_amount: parseNumber(row['売上額']),
-            tax_amount: parseNumber(row['売上額（税）'])
+            tax_amount: parseNumber(row['売上額（税）']),
+            uploaded_file: fileName
         }));
 
         const chunkSize = 1000;
@@ -593,7 +581,8 @@
                     account_name: row['勘定科目名'],
                     item_name: row['費目名称'],
                     sales_amount: 0,
-                    tax_amount: 0
+                    tax_amount: 0,
+                    uploaded_file: fileName // ★修正：サマリーにもファイル名を追加
                 };
             }
             summaryMap[key].sales_amount += parseNumber(row['売上額']);
@@ -675,7 +664,8 @@
         const isAllItemsSelected = allItemCheckboxes.length > 0 && allItemCheckboxes.length === selectedItemCheckboxes.length;
         const selectedItems = Array.from(selectedItemCheckboxes).map(cb => cb.value);
 
-        let query = supabaseClient.from('sales_summary').select('office_id, sales_date, account_name, item_name, sales_amount, tax_amount');
+        // ★修正：selectにuploaded_fileを追加
+        let query = supabaseClient.from('sales_summary').select('office_id, sales_date, account_name, item_name, sales_amount, tax_amount, uploaded_file');
         if (targetOffice !== 'all') query = query.eq('office_id', targetOffice);
         if (dateFrom) query = query.gte('sales_date', dateFrom);
         if (dateTo) query = query.lte('sales_date', dateTo);
@@ -727,19 +717,21 @@
         tableBody.innerHTML = '';
 
         if (data.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="6" class="text-center">該当するデータがありません</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="7" class="text-center">該当するデータがありません</td></tr>';
             summaryArea.innerHTML = `<div class="col-md-4"><div class="card text-white bg-success shadow-sm"><div class="card-body"><h6 class="card-title">合計売上額</h6><h4>¥0</h4></div></div></div><div class="col-md-4"><div class="card text-white bg-info shadow-sm"><div class="card-body"><h6 class="card-title">対象データ数</h6><h4>0 件</h4></div></div></div>`;
             return;
         }
 
-        const headers = ['事業所ID', '売上日', '勘定科目名', '費目名称', '売上額', '売上額（税）'];
+        // ★修正：headersとheaderMapに「取り込んだファイル」を追加
+        const headers = ['事業所ID', '売上日', '勘定科目名', '費目名称', '売上額', '売上額（税）', '取り込んだファイル'];
         const headerMap = {
             '事業所ID': 'office_id',
             '売上日': 'sales_date',
             '勘定科目名': 'account_name',
             '費目名称': 'item_name',
             '売上額': 'sales_amount',
-            '売上額（税）': 'tax_amount'
+            '売上額（税）': 'tax_amount',
+            '取り込んだファイル': 'uploaded_file'
         };
         
         headers.forEach(h => tableHead.innerHTML += `<th>${h}</th>`);
