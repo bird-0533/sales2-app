@@ -183,7 +183,6 @@
     </div>
 </div>
 
-<!-- ★修正：保存済みダッシュボード一覧モーダル -->
 <div class="modal fade" id="savedDashboardsModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -856,7 +855,10 @@
                 document.getElementById('chartsContainer').innerHTML = '<p style="color: #ccc; width: 100%; text-align: center; margin-top: 50px;">右上のボタンからグラフを追加してください</p>';
                 charts = [];
                 
+                // ★追加：フィルター情報の確認アラート
                 if (data.charts && typeof data.charts === 'object' && data.charts.filters) {
+                    alert('フィルター情報を見つけました:\n' + JSON.stringify(data.charts.filters, null, 2));
+                    
                     const f = data.charts.filters;
                     if (f.targetOffice) document.getElementById('filterOfficeSelect').value = f.targetOffice;
                     if (f.aggregationUnit) document.getElementById('aggregationUnit').value = f.aggregationUnit;
@@ -875,6 +877,8 @@
                             cb.checked = f.selectedItems.includes(cb.value);
                         });
                     }
+                } else {
+                    alert('フィルター情報がありません。古い形式のダッシュボードの可能性があります。\nデータ形式: ' + JSON.stringify(data.charts));
                 }
                 
                 if (data.charts && data.charts.types && data.charts.types.length > 0) {
@@ -939,10 +943,8 @@
         localStorage.setItem('currentDashboardId', id);
         await loadDashboard();
         bootstrap.Modal.getInstance(document.getElementById('savedDashboardsModal')).hide();
-        alert('ダッシュボードを読み込みました');
     }
 
-    // ★追加：ダッシュボード削除機能
     async function deleteSavedDashboard(id) {
         if (!confirm('このダッシュボードを削除しますか？')) return;
         const { error } = await supabaseClient.from('sales_dashboards').delete().eq('id', id);
