@@ -37,7 +37,6 @@
                 </select>
             </div>
             <div class="d-flex gap-2">
-                <!-- ★追加：保存済みダッシュボードを開くボタン -->
                 <button class="btn btn-success" onclick="openSavedDashboardsModal()">📂 保存済みを開く</button>
                 <button class="btn btn-outline-dark" id="userManageBtn" onclick="openUserModal()" style="display: none;">👥 ユーザー管理</button>
                 <button class="btn btn-outline-primary" onclick="openAccountModal()">⚙️ アカウント設定</button>
@@ -184,7 +183,6 @@
     </div>
 </div>
 
-<!-- ★追加：保存済みダッシュボード一覧モーダル -->
 <div class="modal fade" id="savedDashboardsModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -299,8 +297,7 @@
             if (sharedId) currentDashboardId = sharedId;
             else currentDashboardId = localStorage.getItem('currentDashboardId');
             if (currentDashboardId) await loadDashboard();
-            
-            await applyFilter();
+            else await applyFilter(); // ダッシュボードがない場合は通常の集計
         }
     };
 
@@ -315,7 +312,13 @@
         setDefaultDateRange();
         await loadOffices();
         await initializeFilters();
-        await applyFilter();
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const sharedId = urlParams.get('dashboard');
+        if (sharedId) currentDashboardId = sharedId;
+        else currentDashboardId = localStorage.getItem('currentDashboardId');
+        if (currentDashboardId) await loadDashboard();
+        else await applyFilter(); // ダッシュボードがない場合は通常の集計
     }
 
     function logout() {
@@ -802,11 +805,33 @@
         charts.forEach(c => { c.chartObj.data = getChartData(c.type, currentFilteredData); c.chartObj.update(); });
     }
 
+    // ★修正：フィルター条件も保存する
     async function saveDashboard() {
         const title = document.getElementById('dashboardTitle').value || '無題のダッシュボード';
         const shareMode = document.getElementById('shareMode').value;
         const chartTypes = charts.map(c => c.type);
-        const dashboardData = { title, share_mode: shareMode, charts: chartTypes };
+        
+        // 現在のフィルター条件を取得
+        const filterSettings = {
+            targetOffice: document.getElementById('filterOfficeSelect').value,
+            aggregationUnit: document.getElementById('aggregationUnit').value,
+            breakdownKey: document.getElementById('breakdownKey').value,
+            taxMode: document.getElementById('taxMode').value,
+            dateFrom: document.getElementById('dateFrom').value,
+            dateTo: document.getElementById('dateTo').value,
+            selectedAccounts: Array.from(document.querySelectorAll('#accountCheckboxes input[type="checkbox"]:checked')).map(cb => cb.value),
+            selectedItems: Array.from(document.querySelectorAll('#itemCheckboxes input[type="checkbox"]:checked')).map(cb => cb.value)
+        };
+
+        const dashboardData = { 
+            title, 
+            share_mode: shareMode, 
+            charts: { 
+                types: chartTypes, 
+                filters: filterSettings 
+            } 
+        };
+        
         try {
             let data, error;
             if (currentDashboardId) {
@@ -816,10 +841,11 @@
             }
             if (error) throw error;
             if (data && data.length > 0) { currentDashboardId = data[0].id; localStorage.setItem('currentDashboardId', currentDashboardId); }
-            alert('ダッシュボードをSupabaseに保存しました！\n（タイトル: ' + title + '）\n\n共有用URL:\n' + window.location.origin + window.location.pathname + '?dashboard=' + currentDashboardId);
+            alert('ダッシュボードをSupabaseに保存しました！\n（タイトル: ' + title + '）\n\nフィルター条件も保存されました。\n\n共有用URL:\n' + window.location.origin + window.location.pathname + '?dashboard=' + currentDashboardId);
         } catch (error) { alert('保存に失敗しました: ' + error.message); }
     }
 
+    // ★修正：フィルター条件を復元してからデータを取得する
     async function loadDashboard() {
         if (!currentDashboardId) return;
         try {
@@ -829,11 +855,41 @@
                 document.getElementById('dashboardTitle').value = data.title || '';
                 document.getElementById('shareMode').value = data.share_mode || 'private';
                 
-                // 既存のグラフをクリアしてから再描画
                 document.getElementById('chartsContainer').innerHTML = '<p style="color: #ccc; width: 100%; text-align: center; margin-top: 50px;">右上のボタンからグラフを追加してください</p>';
                 charts = [];
                 
-                if (data.charts && data.charts.length > 0) data.charts.forEach(type => addChart(type));
+                // フィルター条件の復元
+                if (data.charts && typeof data.charts === 'object' && data.charts.filters) {
+                    const f = data.charts.filters;
+                    if (f.targetOffice) document.getElementById('filterOfficeSelect').value = f.targetOffice;
+                    if (f.aggregationUnit) document.getElementById('aggregationUnit').value = f.aggregationUnit;
+                    if (f.breakdownKey) document.getElementById('breakdownKey').value = f.breakdownKey;
+                    if (f.taxMode) document.getElementById('taxMode').value = f.taxMode;
+                    if (f.dateFrom) document.getElementById('dateFrom').value = f.dateFrom;
+                    if (f.dateTo) document.getElementById('dateTo').value = f.dateTo;
+                    
+                    if (f.selectedAccounts) {
+                        document.querySelectorAll('#accountCheckboxes input[type="checkbox"]').forEach(cb => {
+                            cb.checked = f.selectedAccounts.includes(cb.value);
+                        });
+                    }
+                    if (f.selectedItems) {
+                        document.querySelectorAll('#itemCheckboxes input[type="checkbox"]').forEach(cb => {
+                            cb.checked = f.selectedItems.includes(cb.value);
+                        });
+                    }
+                }
+                
+                // グラフの再描画
+                if (data.charts && data.charts.types && data.charts.types.length > 0) {
+                    data.charts.types.forEach(type => addChart(type));
+                } else if (data.charts && Array.isArray(data.charts) && data.charts.length > 0) {
+                    // 古い形式（配列のみ）の互換性維持
+                    data.charts.forEach(type => addChart(type));
+                }
+                
+                // データを取得してグラフに反映
+                await applyFilter();
             }
         } catch (error) {}
     }
@@ -846,9 +902,10 @@
         document.getElementById('shareMode').value = 'private';
         currentDashboardId = null;
         localStorage.removeItem('currentDashboardId');
+        setDefaultDateRange(); // 期間をデフォルトに戻す
+        applyFilter(); // 空の状態で再表示
     }
 
-    // ★追加：保存済みダッシュボード一覧機能
     async function openSavedDashboardsModal() {
         new bootstrap.Modal(document.getElementById('savedDashboardsModal')).show();
         const tbody = document.getElementById('savedDashboardsTableBody');
