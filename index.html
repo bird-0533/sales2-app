@@ -540,8 +540,19 @@
 
     async function applyFilter() {
         const targetOffice = document.getElementById('filterOfficeSelect').value;
-        const dateFrom = document.getElementById('dateFrom').value || null;
-        const dateTo = document.getElementById('dateTo').value || null;
+        let dateFrom = document.getElementById('dateFrom').value || null;
+        let dateTo = document.getElementById('dateTo').value || null;
+        
+        // ★追加：期間が空の場合はタイムアウトを防ぐために今年に設定
+        if (!dateFrom && !dateTo) {
+            const today = new Date();
+            const year = today.getFullYear();
+            dateFrom = `${year}-01-01`;
+            dateTo = today.toISOString().split('T')[0];
+            document.getElementById('dateFrom').value = dateFrom;
+            document.getElementById('dateTo').value = dateTo;
+        }
+
         currentAggregationUnit = document.getElementById('aggregationUnit').value;
         currentBreakdownKey = document.getElementById('breakdownKey').value;
         currentTaxMode = document.getElementById('taxMode').value;
@@ -839,7 +850,7 @@
             }
             if (error) throw error;
             if (data && data.length > 0) { currentDashboardId = data[0].id; localStorage.setItem('currentDashboardId', currentDashboardId); }
-            alert('ダッシュボードをSupabaseに保存しました！\n（タイトル: ' + title + '）\n\nフィルター条件も保存されました。\n\n共有用URL:\n' + window.location.origin + window.location.pathname + '?dashboard=' + currentDashboardId);
+            alert('ダッシュボードをSupabaseに保存しました！\n（タイトル: ' + title + '）\n\nフィルター条件も保存されました。');
         } catch (error) { alert('保存に失敗しました: ' + error.message); }
     }
 
@@ -855,10 +866,7 @@
                 document.getElementById('chartsContainer').innerHTML = '<p style="color: #ccc; width: 100%; text-align: center; margin-top: 50px;">右上のボタンからグラフを追加してください</p>';
                 charts = [];
                 
-                // ★追加：フィルター情報の確認アラート
                 if (data.charts && typeof data.charts === 'object' && data.charts.filters) {
-                    alert('フィルター情報を見つけました:\n' + JSON.stringify(data.charts.filters, null, 2));
-                    
                     const f = data.charts.filters;
                     if (f.targetOffice) document.getElementById('filterOfficeSelect').value = f.targetOffice;
                     if (f.aggregationUnit) document.getElementById('aggregationUnit').value = f.aggregationUnit;
@@ -877,8 +885,6 @@
                             cb.checked = f.selectedItems.includes(cb.value);
                         });
                     }
-                } else {
-                    alert('フィルター情報がありません。古い形式のダッシュボードの可能性があります。\nデータ形式: ' + JSON.stringify(data.charts));
                 }
                 
                 if (data.charts && data.charts.types && data.charts.types.length > 0) {
