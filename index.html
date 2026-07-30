@@ -183,6 +183,7 @@
     </div>
 </div>
 
+<!-- ★修正：保存済みダッシュボード一覧モーダル -->
 <div class="modal fade" id="savedDashboardsModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -297,7 +298,7 @@
             if (sharedId) currentDashboardId = sharedId;
             else currentDashboardId = localStorage.getItem('currentDashboardId');
             if (currentDashboardId) await loadDashboard();
-            else await applyFilter(); // ダッシュボードがない場合は通常の集計
+            else await applyFilter(); 
         }
     };
 
@@ -318,7 +319,7 @@
         if (sharedId) currentDashboardId = sharedId;
         else currentDashboardId = localStorage.getItem('currentDashboardId');
         if (currentDashboardId) await loadDashboard();
-        else await applyFilter(); // ダッシュボードがない場合は通常の集計
+        else await applyFilter(); 
     }
 
     function logout() {
@@ -805,13 +806,11 @@
         charts.forEach(c => { c.chartObj.data = getChartData(c.type, currentFilteredData); c.chartObj.update(); });
     }
 
-    // ★修正：フィルター条件も保存する
     async function saveDashboard() {
         const title = document.getElementById('dashboardTitle').value || '無題のダッシュボード';
         const shareMode = document.getElementById('shareMode').value;
         const chartTypes = charts.map(c => c.type);
         
-        // 現在のフィルター条件を取得
         const filterSettings = {
             targetOffice: document.getElementById('filterOfficeSelect').value,
             aggregationUnit: document.getElementById('aggregationUnit').value,
@@ -845,7 +844,6 @@
         } catch (error) { alert('保存に失敗しました: ' + error.message); }
     }
 
-    // ★修正：フィルター条件を復元してからデータを取得する
     async function loadDashboard() {
         if (!currentDashboardId) return;
         try {
@@ -858,7 +856,6 @@
                 document.getElementById('chartsContainer').innerHTML = '<p style="color: #ccc; width: 100%; text-align: center; margin-top: 50px;">右上のボタンからグラフを追加してください</p>';
                 charts = [];
                 
-                // フィルター条件の復元
                 if (data.charts && typeof data.charts === 'object' && data.charts.filters) {
                     const f = data.charts.filters;
                     if (f.targetOffice) document.getElementById('filterOfficeSelect').value = f.targetOffice;
@@ -880,15 +877,12 @@
                     }
                 }
                 
-                // グラフの再描画
                 if (data.charts && data.charts.types && data.charts.types.length > 0) {
                     data.charts.types.forEach(type => addChart(type));
                 } else if (data.charts && Array.isArray(data.charts) && data.charts.length > 0) {
-                    // 古い形式（配列のみ）の互換性維持
                     data.charts.forEach(type => addChart(type));
                 }
                 
-                // データを取得してグラフに反映
                 await applyFilter();
             }
         } catch (error) {}
@@ -902,8 +896,8 @@
         document.getElementById('shareMode').value = 'private';
         currentDashboardId = null;
         localStorage.removeItem('currentDashboardId');
-        setDefaultDateRange(); // 期間をデフォルトに戻す
-        applyFilter(); // 空の状態で再表示
+        setDefaultDateRange(); 
+        applyFilter(); 
     }
 
     async function openSavedDashboardsModal() {
@@ -931,7 +925,10 @@
                     <td>${d.title}</td>
                     <td>${shareText}</td>
                     <td>${date}</td>
-                    <td><button class="btn btn-sm btn-primary" onclick="openSavedDashboard('${d.id}')">開く</button></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="openSavedDashboard('${d.id}')">開く</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteSavedDashboard('${d.id}')">削除</button>
+                    </td>
                 </tr>
             `;
         });
@@ -943,6 +940,22 @@
         await loadDashboard();
         bootstrap.Modal.getInstance(document.getElementById('savedDashboardsModal')).hide();
         alert('ダッシュボードを読み込みました');
+    }
+
+    // ★追加：ダッシュボード削除機能
+    async function deleteSavedDashboard(id) {
+        if (!confirm('このダッシュボードを削除しますか？')) return;
+        const { error } = await supabaseClient.from('sales_dashboards').delete().eq('id', id);
+        if (error) {
+            alert('削除エラー: ' + error.message);
+            return;
+        }
+        if (currentDashboardId === id) {
+            currentDashboardId = null;
+            localStorage.removeItem('currentDashboardId');
+            newDashboard();
+        }
+        openSavedDashboardsModal();
     }
 </script>
 </body>
