@@ -415,7 +415,9 @@
         if (newName === null) return; 
         if (newId !== oldId && offices.some(o => o.id === newId)) { alert('その番号は既に存在します'); return; }
         await supabaseClient.from('offices').update({ id: newId, name: newName }).eq('id', oldId);
+        // ★修正：sales_data と sales_summary 両方の事業所IDを更新
         await supabaseClient.from('sales_data').update({ office_id: newId }).eq('office_id', oldId);
+        await supabaseClient.from('sales_summary').update({ office_id: newId }).eq('office_id', oldId);
         office.id = newId;
         office.name = newName;
         renderOffices();
@@ -425,7 +427,9 @@
     async function deleteOffice(id) {
         if (!confirm('この事業所を削除しますか？（アップロード済みの売上データも全て消えます）')) return;
         await supabaseClient.from('offices').delete().eq('id', id);
+        // ★修正：sales_data と sales_summary 両方を削除
         await supabaseClient.from('sales_data').delete().eq('office_id', id);
+        await supabaseClient.from('sales_summary').delete().eq('office_id', id);
         offices = offices.filter(o => o.id !== id);
         renderOffices();
         initializeFilters();
@@ -470,9 +474,11 @@
                 complete: async function(results) {
                     const cleanedData = results.data.map(row => {
                         if (row['売上日']) row['売上日'] = normalizeDate(row['売上日']);
+                        row['事業所ID'] = officeId;
                         return row;
                     });
-                    const { count } = await supabaseClient.from('sales_data').select('*', { count: 'exact', head: true }).eq('office_id', officeId);
+                    // ★修正：sales_summary テーブルでデータ存在確認
+                    const { count } = await supabaseClient.from('sales_summary').select('*', { count: 'exact', head: true }).eq('office_id', officeId);
                     pendingUpload = { officeId, data: cleanedData };
                     if (count > 0) new bootstrap.Modal(document.getElementById('uploadModal')).show();
                     else processUpload('append'); 
@@ -486,8 +492,12 @@
         const { officeId, data } = pendingUpload;
         alert('アップロード中です。完了まで画面を閉じないでください。');
 
-        if (mode === 'overwrite') await supabaseClient.from('sales_data').delete().eq('office_id', officeId);
+        if (mode === 'overwrite') {
+            await supabaseClient.from('sales_data').delete().eq('office_id', officeId);
+            await supabaseClient.from('sales_summary').delete().eq('office_id', officeId);
+        }
 
+        // 1. 明細データ（sales_data）への保存
         const insertData = data.map(row => ({
             office_id: officeId,
             sales_date: row['売上日'],
@@ -505,6 +515,32 @@
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
+        // 2. ★追加：サマリーデータ（sales_summary）の作成と保存
+        const summaryMap = {};
+        data.forEach(row => {
+            const key = `${row['事業所ID']}_${row['売上日']}_${row['勘定科目名']}_${row['費目名称']}`;
+            if (!summaryMap[key]) {
+                summaryMap[key] = {
+                    office_id: row['事業所ID'],
+                    sales_date: row['売上日'],
+                    account_name: row['勘定科目名'],
+                    item_name: row['費目名称'],
+                    sales_amount: 0,
+                    tax_amount: 0
+                };
+            }
+            summaryMap[key].sales_amount += parseNumber(row['売上額']);
+            summaryMap[key].tax_amount += parseNumber(row['売上額（税）']);
+        });
+
+        const summaryInsertData = Object.values(summaryMap);
+        for (let i = 0; i < summaryInsertData.length; i += chunkSize) {
+            const chunk = summaryInsertData.slice(i, i + chunkSize);
+            const { error } = await supabaseClient.from('sales_summary').insert(chunk);
+            if (error) console.error('Summary Insert error', error);
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
         bootstrap.Modal.getInstance(document.getElementById('uploadModal'))?.hide();
         pendingUpload = null;
         document.getElementById('csvFileInput').value = ''; 
@@ -517,12 +553,17 @@
         document.querySelectorAll(`#${containerId} input[type="checkbox"]`).forEach(cb => cb.checked = isChecked);
     }
 
+    // ★修正：科目・費目リストを sales_summary から取得
     async function initializeFilters() {
-        const { data, error } = await supabaseClient.rpc('get_filter_options');
+        const { data, error } = await supabaseClient.from('sales_summary').select('account_name, item_name');
         if (error) return;
 
-        const accounts = data.accounts || [];
-        const items = data.items || [];
+        const accounts = new Set();
+        const items = new Set();
+        data.forEach(row => {
+            if (row.account_name) accounts.add(row.account_name);
+            if (row.item_name) items.add(row.item_name);
+        });
 
         const accountContainer = document.getElementById('accountCheckboxes');
         const itemContainer = document.getElementById('itemCheckboxes');
@@ -538,12 +579,12 @@
         });
     }
 
+    // ★修正：sales_summary テーブルからデータを取得
     async function applyFilter() {
         const targetOffice = document.getElementById('filterOfficeSelect').value;
         let dateFrom = document.getElementById('dateFrom').value || null;
         let dateTo = document.getElementById('dateTo').value || null;
         
-        // ★追加：期間が空の場合はタイムアウトを防ぐために今年に設定
         if (!dateFrom && !dateTo) {
             const today = new Date();
             const year = today.getFullYear();
@@ -567,7 +608,8 @@
         const isAllItemsSelected = allItemCheckboxes.length > 0 && allItemCheckboxes.length === selectedItemCheckboxes.length;
         const selectedItems = Array.from(selectedItemCheckboxes).map(cb => cb.value);
 
-        let query = supabaseClient.from('sales_data').select('office_id, sales_date, account_name, item_name, sales_amount, tax_amount');
+        // sales_summary テーブルから取得
+        let query = supabaseClient.from('sales_summary').select('office_id, sales_date, account_name, item_name, sales_amount, tax_amount');
         if (targetOffice !== 'all') query = query.eq('office_id', targetOffice);
         if (dateFrom) query = query.gte('sales_date', dateFrom);
         if (dateTo) query = query.lte('sales_date', dateTo);
