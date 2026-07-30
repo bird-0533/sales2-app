@@ -15,7 +15,7 @@
 </head>
 <body class="bg-light">
 
-<!-- ★追加：ローディングオーバーレイ -->
+<!-- ローディングオーバーレイ -->
 <div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
     <div class="text-center text-light">
         <div class="spinner-border" role="status" style="width: 4rem; height: 4rem;">
@@ -29,7 +29,7 @@
     <div class="card shadow" style="width: 350px;">
         <div class="card-body">
             <h3 class="text-center mb-4">ログイン</h3>
-            <div class="mb-3"><input type="text" class="form-control" id="loginUsername" placeholder="ユーザーID"></div>
+            <div class="mb-3"><input type="email" class="form-control" id="loginUsername" placeholder="Emailアドレス"></div>
             <div class="mb-3"><input type="password" class="form-control" id="loginPassword" placeholder="パスワード"></div>
             <button class="btn btn-primary w-100" onclick="login()">ログイン</button>
         </div>
@@ -214,13 +214,13 @@
             <div class="modal-body">
                 <h6>新規ユーザー追加</h6>
                 <div class="row g-2 mb-4">
-                    <div class="col-md-4"><input type="text" class="form-control" id="newUsername" placeholder="ユーザーID"></div>
+                    <div class="col-md-4"><input type="email" class="form-control" id="newUsername" placeholder="Emailアドレス"></div>
                     <div class="col-md-4"><input type="password" class="form-control" id="newPassword" placeholder="パスワード"></div>
                     <div class="col-md-3"><select class="form-select" id="newRole"><option value="user">使用者</option><option value="admin">管理者</option></select></div>
                     <div class="col-md-1"><button class="btn btn-primary w-100" onclick="addUser()">＋</button></div>
                 </div>
                 <h6>ユーザー一覧</h6>
-                <table class="table table-sm table-bordered"><thead><tr><th>ユーザーID</th><th>権限</th><th>操作</th></tr></thead><tbody id="userTableBody"></tbody></table>
+                <table class="table table-sm table-bordered"><thead><tr><th>Email</th><th>権限</th><th>操作</th></tr></thead><tbody id="userTableBody"></tbody></table>
             </div>
         </div>
     </div>
@@ -232,7 +232,7 @@
             <div class="modal-header"><h5 class="modal-title">⚙️ アカウント設定</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
                 <p>ログイン中のユーザー：<strong id="currentUsernameDisplay"></strong></p>
-                <div class="mb-3"><label class="form-label">新しいユーザー名</label><input type="text" class="form-control" id="accNewUsername" placeholder="変更する場合のみ入力"></div>
+                <div class="mb-3"><label class="form-label">新しいEmailアドレス</label><input type="email" class="form-control" id="accNewUsername" placeholder="変更する場合のみ入力"></div>
                 <div class="mb-3"><label class="form-label">新しいパスワード</label><input type="password" class="form-control" id="accNewPassword" placeholder="変更する場合のみ入力"></div>
             </div>
             <div class="modal-footer">
@@ -266,13 +266,8 @@
     let currentDashboardId = null; 
     let currentUser = null;
 
-    // ★追加：ローディング表示/非表示の関数
-    function showLoading() {
-        document.getElementById('loadingOverlay').style.display = 'flex';
-    }
-    function hideLoading() {
-        document.getElementById('loadingOverlay').style.display = 'none';
-    }
+    function showLoading() { document.getElementById('loadingOverlay').style.display = 'flex'; }
+    function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
 
     function setDefaultDateRange() {
         const today = new Date();
@@ -298,18 +293,28 @@
     }
 
     window.onload = async function() {
-        const savedUser = sessionStorage.getItem('currentUser');
-        if (savedUser) {
-            currentUser = JSON.parse(savedUser);
+        // ★修正：Supabase Authのセッションを確認してログイン状態を復元
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            const email = session.user.email;
+            const { data: userData } = await supabaseClient.from('app_users').select('*').eq('username', email).single();
+            
+            if (userData) {
+                currentUser = { id: session.user.id, username: email, role: userData.role };
+            } else {
+                // app_usersになければデフォルトのuser権限で作成
+                await supabaseClient.from('app_users').insert({ username: email, role: 'user', password: 'managed_by_auth' });
+                currentUser = { id: session.user.id, username: email, role: 'user' };
+            }
+            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+            
             showMainApp();
             setDefaultDateRange();
-            showLoading(); // ★追加
+            showLoading();
             try {
                 await loadOffices();
                 await initializeFilters();
-            } catch (e) {
-                console.error("初期化エラー", e);
-            }
+            } catch (e) { console.error("初期化エラー", e); }
             
             const urlParams = new URLSearchParams(window.location.search);
             const sharedId = urlParams.get('dashboard');
@@ -317,21 +322,33 @@
             else currentDashboardId = localStorage.getItem('currentDashboardId');
             if (currentDashboardId) await loadDashboard();
             else await applyFilter(); 
-            hideLoading(); // ★追加
+            hideLoading();
         }
     };
 
+    // ★修正：Supabase Authでログイン
     async function login() {
-        const username = document.getElementById('loginUsername').value;
+        const email = document.getElementById('loginUsername').value;
         const password = document.getElementById('loginPassword').value;
-        showLoading(); // ★追加
-        const { data, error } = await supabaseClient.from('app_users').select('*').eq('username', username).eq('password', password).single();
-        if (error || !data) { 
-            hideLoading(); // ★追加
-            alert('ユーザーIDまたはパスワードが間違っています'); 
-            return; 
+        
+        showLoading();
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
+        if (error) {
+            hideLoading();
+            alert('ログインに失敗しました: ' + error.message);
+            return;
         }
-        currentUser = data;
+        
+        // app_usersテーブルから権限を取得
+        const { data: userData, error: userError } = await supabaseClient.from('app_users').select('*').eq('username', email).single();
+        if (userError || !userData) {
+            // app_usersにレコードがない場合はデフォルトのuser権限とする
+            currentUser = { id: data.user.id, username: email, role: 'user' };
+            await supabaseClient.from('app_users').insert({ username: email, role: 'user', password: 'managed_by_auth' });
+        } else {
+            currentUser = { id: data.user.id, username: email, role: userData.role };
+        }
+        
         sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
         showMainApp();
         setDefaultDateRange();
@@ -344,10 +361,12 @@
         else currentDashboardId = localStorage.getItem('currentDashboardId');
         if (currentDashboardId) await loadDashboard();
         else await applyFilter(); 
-        hideLoading(); // ★追加
+        hideLoading();
     }
 
-    function logout() {
+    // ★修正：Supabase Authでログアウト
+    async function logout() {
+        await supabaseClient.auth.signOut();
         currentUser = null;
         sessionStorage.removeItem('currentUser');
         document.getElementById('mainApp').style.display = 'none';
@@ -374,18 +393,26 @@
         new bootstrap.Modal(document.getElementById('accountModal')).show();
     }
 
+    // ★修正：Supabase Authでパスワード・Email更新
     async function updateAccount() {
-        const newUsername = document.getElementById('accNewUsername').value;
+        const newEmail = document.getElementById('accNewUsername').value;
         const newPassword = document.getElementById('accNewPassword').value;
-        if (!newUsername && !newPassword) { alert('変更するユーザー名またはパスワードを入力してください'); return; }
+        if (!newEmail && !newPassword) { alert('変更するEmailまたはパスワードを入力してください'); return; }
+        
         const updateData = {};
-        if (newUsername) updateData.username = newUsername;
+        if (newEmail) updateData.email = newEmail;
         if (newPassword) updateData.password = newPassword;
-        const { error } = await supabaseClient.from('app_users').update(updateData).eq('id', currentUser.id);
+        
+        const { error } = await supabaseClient.auth.updateUser(updateData);
         if (error) { alert('更新に失敗しました: ' + error.message); return; }
-        if (newUsername) currentUser.username = newUsername;
-        if (newPassword) currentUser.password = newPassword;
+        
+        if (newEmail) {
+            currentUser.username = newEmail;
+            // app_usersテーブルのusernameも更新
+            await supabaseClient.from('app_users').update({ username: newEmail }).eq('username', currentUser.username);
+        }
         sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+        
         alert('アカウント情報を更新しました');
         bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
     }
@@ -400,16 +427,34 @@
             tbody.innerHTML += `<tr><td>${u.username}</td><td><select class="form-select form-select-sm" onchange="changeRole('${u.id}', this.value)" ${isAdmin ? 'disabled' : ''}><option value="user" ${u.role === 'user' ? 'selected' : ''}>使用者</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>管理者</option></select></td><td>${isAdmin ? '-' : `<button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">削除</button>`}</td></tr>`;
         });
     }
+    
+    // ★修正：Supabase Authにユーザー作成し、app_usersに権限保存
     async function addUser() {
-        const username = document.getElementById('newUsername').value;
+        const email = document.getElementById('newUsername').value;
         const password = document.getElementById('newPassword').value;
         const role = document.getElementById('newRole').value;
-        if (!username || !password) { alert('ユーザーIDとパスワードを入力してください'); return; }
-        const { error } = await supabaseClient.from('app_users').insert({ username, password, role });
+        if (!email || !password) { alert('Emailとパスワードを入力してください'); return; }
+        
+        // Supabase Authにユーザー作成
+        const { data, error } = await supabaseClient.auth.signUp({ email: email, password: password });
         if (error) { alert('追加エラー: ' + error.message); return; }
+        
+        // app_usersテーブルに権限を保存
+        const { error: dbError } = await supabaseClient.from('app_users').insert({ username: email, role: role, password: 'managed_by_auth' });
+        if (dbError) { alert('権限保存エラー: ' + dbError.message); return; }
+        
         loadUsers();
     }
-    async function deleteUser(id) { if (!confirm('削除しますか？')) return; await supabaseClient.from('app_users').delete().eq('id', id); loadUsers(); }
+    
+    async function deleteUser(id) { 
+        if (!confirm('削除しますか？')) return; 
+        // app_usersから削除（Authからの削除は管理画面で行う必要があります）
+        const { data: userData } = await supabaseClient.from('app_users').select('username').eq('id', id).single();
+        if (userData) {
+            await supabaseClient.from('app_users').delete().eq('id', id);
+        }
+        loadUsers(); 
+    }
     async function changeRole(id, role) { await supabaseClient.from('app_users').update({ role }).eq('id', id); loadUsers(); }
 
     async function loadOffices() {
@@ -513,7 +558,7 @@
     async function processUpload(mode) {
         if (!pendingUpload) return;
         const { officeId, data } = pendingUpload;
-        showLoading(); // ★追加
+        showLoading();
         alert('アップロード中です。完了まで画面を閉じないでください。');
 
         if (mode === 'overwrite') {
@@ -568,7 +613,7 @@
         document.getElementById('csvFileInput').value = ''; 
         await initializeFilters();
         await applyFilter();
-        hideLoading(); // ★追加
+        hideLoading();
         alert('データのアップロードが完了しました！');
     }
 
@@ -602,7 +647,7 @@
     }
 
     async function applyFilter() {
-        showLoading(); // ★追加
+        showLoading();
         const targetOffice = document.getElementById('filterOfficeSelect').value;
         let dateFrom = document.getElementById('dateFrom').value || null;
         let dateTo = document.getElementById('dateTo').value || null;
@@ -639,7 +684,7 @@
         try {
             data = await fetchAllData(query);
         } catch (error) { 
-            hideLoading(); // ★追加
+            hideLoading();
             alert('データ取得エラー:\n' + JSON.stringify(error, null, 2));
             return; 
         }
@@ -655,7 +700,7 @@
         currentFilteredData = filteredData;
         displayData(currentFilteredData);
         updateAllCharts();
-        hideLoading(); // ★追加
+        hideLoading();
     }
 
     function parseNumber(str) {
@@ -1012,10 +1057,10 @@
     async function openSavedDashboard(id) {
         currentDashboardId = id;
         localStorage.setItem('currentDashboardId', id);
-        showLoading(); // ★追加
+        showLoading();
         await loadDashboard();
         bootstrap.Modal.getInstance(document.getElementById('savedDashboardsModal')).hide();
-        hideLoading(); // ★追加
+        hideLoading();
     }
 
     async function deleteSavedDashboard(id) {
