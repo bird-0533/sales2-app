@@ -15,6 +15,16 @@
 </head>
 <body class="bg-light">
 
+<!-- ★追加：ローディングオーバーレイ -->
+<div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
+    <div class="text-center text-light">
+        <div class="spinner-border" role="status" style="width: 4rem; height: 4rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="mt-3 fs-5">データ取得中...</div>
+    </div>
+</div>
+
 <div id="loginScreen" style="display: flex; align-items: center; justify-content: center; height: 100vh;">
     <div class="card shadow" style="width: 350px;">
         <div class="card-body">
@@ -256,6 +266,14 @@
     let currentDashboardId = null; 
     let currentUser = null;
 
+    // ★追加：ローディング表示/非表示の関数
+    function showLoading() {
+        document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+    function hideLoading() {
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
     function setDefaultDateRange() {
         const today = new Date();
         const year = today.getFullYear();
@@ -285,6 +303,7 @@
             currentUser = JSON.parse(savedUser);
             showMainApp();
             setDefaultDateRange();
+            showLoading(); // ★追加
             try {
                 await loadOffices();
                 await initializeFilters();
@@ -298,14 +317,20 @@
             else currentDashboardId = localStorage.getItem('currentDashboardId');
             if (currentDashboardId) await loadDashboard();
             else await applyFilter(); 
+            hideLoading(); // ★追加
         }
     };
 
     async function login() {
         const username = document.getElementById('loginUsername').value;
         const password = document.getElementById('loginPassword').value;
+        showLoading(); // ★追加
         const { data, error } = await supabaseClient.from('app_users').select('*').eq('username', username).eq('password', password).single();
-        if (error || !data) { alert('ユーザーIDまたはパスワードが間違っています'); return; }
+        if (error || !data) { 
+            hideLoading(); // ★追加
+            alert('ユーザーIDまたはパスワードが間違っています'); 
+            return; 
+        }
         currentUser = data;
         sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
         showMainApp();
@@ -319,6 +344,7 @@
         else currentDashboardId = localStorage.getItem('currentDashboardId');
         if (currentDashboardId) await loadDashboard();
         else await applyFilter(); 
+        hideLoading(); // ★追加
     }
 
     function logout() {
@@ -415,7 +441,6 @@
         if (newName === null) return; 
         if (newId !== oldId && offices.some(o => o.id === newId)) { alert('その番号は既に存在します'); return; }
         await supabaseClient.from('offices').update({ id: newId, name: newName }).eq('id', oldId);
-        // ★修正：sales_data と sales_summary 両方の事業所IDを更新
         await supabaseClient.from('sales_data').update({ office_id: newId }).eq('office_id', oldId);
         await supabaseClient.from('sales_summary').update({ office_id: newId }).eq('office_id', oldId);
         office.id = newId;
@@ -427,7 +452,6 @@
     async function deleteOffice(id) {
         if (!confirm('この事業所を削除しますか？（アップロード済みの売上データも全て消えます）')) return;
         await supabaseClient.from('offices').delete().eq('id', id);
-        // ★修正：sales_data と sales_summary 両方を削除
         await supabaseClient.from('sales_data').delete().eq('office_id', id);
         await supabaseClient.from('sales_summary').delete().eq('office_id', id);
         offices = offices.filter(o => o.id !== id);
@@ -477,7 +501,6 @@
                         row['事業所ID'] = officeId;
                         return row;
                     });
-                    // ★修正：sales_summary テーブルでデータ存在確認
                     const { count } = await supabaseClient.from('sales_summary').select('*', { count: 'exact', head: true }).eq('office_id', officeId);
                     pendingUpload = { officeId, data: cleanedData };
                     if (count > 0) new bootstrap.Modal(document.getElementById('uploadModal')).show();
@@ -487,9 +510,10 @@
         };
     });
 
-        async function processUpload(mode) {
+    async function processUpload(mode) {
         if (!pendingUpload) return;
         const { officeId, data } = pendingUpload;
+        showLoading(); // ★追加
         alert('アップロード中です。完了まで画面を閉じないでください。');
 
         if (mode === 'overwrite') {
@@ -497,7 +521,6 @@
             await supabaseClient.from('sales_summary').delete().eq('office_id', officeId);
         }
 
-        // 1. 明細データ（sales_data）への保存
         const insertData = data.map(row => ({
             office_id: officeId,
             sales_date: row['売上日'],
@@ -515,7 +538,6 @@
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        // 2. サマリーデータ（sales_summary）の作成と保存
         const summaryMap = {};
         data.forEach(row => {
             const key = `${row['事業所ID']}_${row['売上日']}_${row['勘定科目名']}_${row['費目名称']}`;
@@ -536,7 +558,6 @@
         const summaryInsertData = Object.values(summaryMap);
         for (let i = 0; i < summaryInsertData.length; i += chunkSize) {
             const chunk = summaryInsertData.slice(i, i + chunkSize);
-            // ★修正：upsertを使って、重複時は上書きするように変更
             const { error } = await supabaseClient.from('sales_summary').upsert(chunk, { onConflict: 'office_id,sales_date,account_name,item_name' });
             if (error) console.error('Summary Insert error', error);
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -547,15 +568,14 @@
         document.getElementById('csvFileInput').value = ''; 
         await initializeFilters();
         await applyFilter();
+        hideLoading(); // ★追加
         alert('データのアップロードが完了しました！');
     }
-
 
     function toggleAll(containerId, isChecked) {
         document.querySelectorAll(`#${containerId} input[type="checkbox"]`).forEach(cb => cb.checked = isChecked);
     }
 
-    // ★修正：科目・費目リストを sales_summary から取得
     async function initializeFilters() {
         const { data, error } = await supabaseClient.from('sales_summary').select('account_name, item_name');
         if (error) return;
@@ -581,8 +601,8 @@
         });
     }
 
-    // ★修正：sales_summary テーブルからデータを取得
     async function applyFilter() {
+        showLoading(); // ★追加
         const targetOffice = document.getElementById('filterOfficeSelect').value;
         let dateFrom = document.getElementById('dateFrom').value || null;
         let dateTo = document.getElementById('dateTo').value || null;
@@ -610,7 +630,6 @@
         const isAllItemsSelected = allItemCheckboxes.length > 0 && allItemCheckboxes.length === selectedItemCheckboxes.length;
         const selectedItems = Array.from(selectedItemCheckboxes).map(cb => cb.value);
 
-        // sales_summary テーブルから取得
         let query = supabaseClient.from('sales_summary').select('office_id, sales_date, account_name, item_name, sales_amount, tax_amount');
         if (targetOffice !== 'all') query = query.eq('office_id', targetOffice);
         if (dateFrom) query = query.gte('sales_date', dateFrom);
@@ -620,6 +639,7 @@
         try {
             data = await fetchAllData(query);
         } catch (error) { 
+            hideLoading(); // ★追加
             alert('データ取得エラー:\n' + JSON.stringify(error, null, 2));
             return; 
         }
@@ -635,6 +655,7 @@
         currentFilteredData = filteredData;
         displayData(currentFilteredData);
         updateAllCharts();
+        hideLoading(); // ★追加
     }
 
     function parseNumber(str) {
@@ -991,8 +1012,10 @@
     async function openSavedDashboard(id) {
         currentDashboardId = id;
         localStorage.setItem('currentDashboardId', id);
+        showLoading(); // ★追加
         await loadDashboard();
         bootstrap.Modal.getInstance(document.getElementById('savedDashboardsModal')).hide();
+        hideLoading(); // ★追加
     }
 
     async function deleteSavedDashboard(id) {
