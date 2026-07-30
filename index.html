@@ -487,7 +487,7 @@
         };
     });
 
-    async function processUpload(mode) {
+        async function processUpload(mode) {
         if (!pendingUpload) return;
         const { officeId, data } = pendingUpload;
         alert('アップロード中です。完了まで画面を閉じないでください。');
@@ -515,7 +515,7 @@
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        // 2. ★追加：サマリーデータ（sales_summary）の作成と保存
+        // 2. サマリーデータ（sales_summary）の作成と保存
         const summaryMap = {};
         data.forEach(row => {
             const key = `${row['事業所ID']}_${row['売上日']}_${row['勘定科目名']}_${row['費目名称']}`;
@@ -536,7 +536,8 @@
         const summaryInsertData = Object.values(summaryMap);
         for (let i = 0; i < summaryInsertData.length; i += chunkSize) {
             const chunk = summaryInsertData.slice(i, i + chunkSize);
-            const { error } = await supabaseClient.from('sales_summary').insert(chunk);
+            // ★修正：upsertを使って、重複時は上書きするように変更
+            const { error } = await supabaseClient.from('sales_summary').upsert(chunk, { onConflict: 'office_id,sales_date,account_name,item_name' });
             if (error) console.error('Summary Insert error', error);
             await new Promise(resolve => setTimeout(resolve, 100));
         }
@@ -548,6 +549,7 @@
         await applyFilter();
         alert('データのアップロードが完了しました！');
     }
+
 
     function toggleAll(containerId, isChecked) {
         document.querySelectorAll(`#${containerId} input[type="checkbox"]`).forEach(cb => cb.checked = isChecked);
